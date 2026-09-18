@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-32 0 448 448" fill="none" role="img" aria-labelledby="title">
+  <title id="title">Still folded-paper logo</title>
+  <!-- The return fold connects both paper faces; the canvas stays transparent. -->
+  <path d="M119 156 261 216c25 10 37 23 35 41-1 8-6 17-15 24l-32 19-126-64c-35-18-49-33-43-53 5-13 18-21 39-27Z" fill="#969B9D"/>
+  <path d="M270 30c12-5 22-1 29 12l30 56c11 21 4 34-15 42l-148 64c-29 12-39 21-30 32-25-11-49-28-55-47-8-25 4-45 29-56L270 30Z" fill="#EEEEEC"/>
+  <path d="M263 216c27 12 45 29 51 47l14 35c8 20 2 34-17 43l-165 72c-13 6-25 2-32-11l-31-57c-10-20-3-34 17-43l151-65c27-12 35-18 12-21Z" fill="#EEEEEC"/>
+</svg>

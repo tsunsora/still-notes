@@ -1,0 +1,52 @@
+{
+  "name": "still-notes",
+  "productName": "Still",
+  "version": "1.4.0",
+  "description": "A quiet space for Markdown notes",
+  "main": "src/main.cjs",
+  "author": "Still",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "package": "electron-packager . Still --platform=win32 --arch=x64 --out=../Still-Windows --overwrite --asar --icon=src/icon.ico --ignore=tests --ignore=README.md",
+    "installer": "electron-builder --win nsis --x64 --publish never"
+  },
+  "dependencies": {
+    "dompurify": "3.4.15",
+    "marked": "18.0.13"
+  },
+  "devDependencies": {
+    "@electron/packager": "^20.3.0",
+    "@material-design-icons/svg": "^0.14.15",
+    "electron": "44.4.2",
+    "electron-builder": "26.15.3",
+    "playwright": "^1.58.0",
+    "sharp": "^0.35.4"
+  },
+  "build": {
+    "appId": "com.still.notes",
+    "productName": "Still",
+    "directories": {
+      "output": "../Still-Installer"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "src/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "Still-Setup-${version}.${ext}"
+    }
+  }
+}
