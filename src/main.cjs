@@ -1,10 +1,11 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeTheme } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { pathToFileURL } = require('node:url');
+const {createUpdates}=require('./updates.cjs');
 if (process.env.STILL_TEST_DATA) app.setPath('userData', process.env.STILL_TEST_DATA);
-let win, root = '', settings = {}, closing = false;
+let win, updates, root = '', settings = {}, closing = false;
 const revisions = new Map();
 const hash = s => crypto.createHash('sha256').update(s).digest('hex');
 const cfg = () => path.join(app.getPath('userData'), 'settings.json');
@@ -110,7 +111,7 @@ handle('place',async(rel,parent,anchor='',position='after')=>{
   const next=await moveItem(rel,parent);const items=initial.filter(p=>p!==rel&&p!==next);const at=anchor?items.indexOf(anchor):-1;items.splice(at<0?items.length:at+(position==='after'?1:0),0,next);
   const m=workspaceMeta();const orders=new Map(m.orders);orders.set(parent,items);m.orders=Array.from(orders);await saveSettings();return {path:next,tree:await scan()};
 });
-handle('set-icon',async(rel,id)=>{await safe(rel);const catalog=require('./icon-catalog.json');if(id!==null&&!catalog.includes(id))throw Error('Unknown icon.');const m=workspaceMeta();const icons=new Map(m.icons);id===null?icons.delete(rel):icons.set(rel,id);m.icons=Array.from(icons);await saveSettings();return Object.fromEntries(icons);});
+handle('set-icon',async(rel,id)=>{const file=await safe(rel);if(!(await fs.stat(file)).isFile()||!/\.md$/i.test(rel))throw Error('Only note icons can be changed.');const catalog=require('./icon-catalog.json');if(id!==null&&!catalog.includes(id))throw Error('Unknown icon.');const m=workspaceMeta();const icons=new Map(m.icons);id===null?icons.delete(rel):icons.set(rel,id);m.icons=Array.from(icons);await saveSettings();return Object.fromEntries(icons);});
 handle('import',async(files,parent)=>{if(!Array.isArray(files)||files.length>100)throw Error('Drop up to 100 Markdown files at a time.');await safe(parent);const imported=[];for(const source of files){if(typeof source!=='string'||!path.isAbsolute(source)||!source.toLowerCase().endsWith('.md'))throw Error('Only Markdown (.md) files can be imported.');const stat=await fs.stat(source);if(!stat.isFile()||stat.size>8*1024*1024)throw Error('Each note must be a file under 8 MB.');}
   for(const source of files){const original=path.basename(source);let name=original,index=2;for(;;){const rel=path.join(parent,name);try{await fs.copyFile(source,await safe(rel,false),require('node:fs').constants.COPYFILE_EXCL);imported.push(rel);break;}catch(e){if(e.code!=='EEXIST')throw e;name=path.basename(original,'.md')+' ('+index+++').md';}}}return {paths:imported,tree:await scan()};});
 handle('preferences',async values=>{if(values.mode==='edit'||values.mode==='preview')settings.mode=values.mode;if(Number.isFinite(values.sidebarWidth))settings.sidebarWidth=Math.round(Math.max(220,Math.min(480,values.sidebarWidth)));delete settings.theme;await saveSettings();return true;});
@@ -120,18 +121,34 @@ handle('external', async url => {if(typeof url==='string' && /^https?:\/\//i.tes
 handle('window', async action => {if(action==='minimize')win.minimize();if(action==='maximize')win.isMaximized()?win.unmaximize():win.maximize();if(action==='close')win.close();});
 handle('window-state',async()=>({maximized:win.isMaximized()}));
 handle('ready-close', async () => {await writes;await settingsWrites; closing=true;win.close();});
+handle('update-state',()=>updates.snapshot());
+handle('check-updates',()=>updates.check());
+handle('install-update',()=>updates.install());
 app.whenReady().then(async()=>{
   try {settings=JSON.parse(await fs.readFile(cfg(),'utf8'));}catch{settings={};}
   if(!settings.root){const initial=process.env.STILL_TEST_NOTES||path.join(app.getPath('documents'),'Still Notes');await fs.mkdir(initial,{recursive:true});settings.root=await fs.realpath(initial);await saveSettings();}
   try{root=await fs.realpath(settings.root);}catch{root='';}
   rememberRoot();await saveSettings();
-  win=new BrowserWindow({width:1220,height:820,minWidth:680,minHeight:480,title:'Still',icon:path.join(__dirname,'icon.ico'),backgroundColor:'#212121',frame:false,show:false,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+  // Native acrylic blurs the desktop once, beneath our shared translucent surface.
+  // Keep a solid charcoal fallback on systems without Windows 11 backdrop support.
+  const acrylic=process.platform==='win32'&&Number(require('node:os').release().split('.')[2])>=22621;
+  nativeTheme.themeSource='dark';
+  win=new BrowserWindow({width:1220,height:820,minWidth:680,minHeight:480,title:'Still',icon:path.join(__dirname,'icon.ico'),backgroundColor:acrylic?'#00000000':'#1c2326',backgroundMaterial:acrylic?'acrylic':'none',frame:false,show:false,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
   Menu.setApplicationMenu(null);
   for(const event of ['maximize','unmaximize'])win.on(event,()=>win.webContents.send('window-state',{maximized:win.isMaximized()}));
   win.webContents.session.setPermissionRequestHandler((_w,_p,cb)=>cb(false));
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
   win.webContents.on('will-navigate',event=>event.preventDefault());
   win.on('close',e=>{if(!closing){e.preventDefault();win.webContents.send('before-close');}});
-  await win.loadURL(pathToFileURL(path.join(__dirname,'index.html')).href);win.show();
+  const hasUpdateConfig=await fs.access(path.join(process.resourcesPath,'app-update.yml')).then(()=>true,()=>false);
+  const disabledReason=!app.isPackaged||process.env.STILL_TEST_DATA?'development':process.platform!=='win32'||!hasUpdateConfig?'portable':'';
+  updates=createUpdates({
+   disabledReason,
+   updater:disabledReason?null:require('electron-updater').autoUpdater,
+   notify:state=>{if(!win.isDestroyed())win.webContents.send('update-state',state);},
+   beforeInstall:async()=>{await writes;await settingsWrites;closing=true;},
+   installFailed:()=>{closing=false;}
+  });
+  await win.loadURL(pathToFileURL(path.join(__dirname,'index.html')).href);win.show();updates.start();
 });
-app.on('window-all-closed',()=>app.quit());
+app.on('window-all-closed',()=>{updates?.stop();app.quit();});

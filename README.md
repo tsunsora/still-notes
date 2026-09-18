@@ -10,7 +10,7 @@ An Obsidian vault can be opened as a folder. Still edits standard Markdown; it d
 
 ## Everyday use
 
-- New note and New folder create items in the most recently selected folder. Click Notes above the note tree to return the creation location to the root. The highlighted folder shows where new notes will be created. Folder menus also let you create items inside a specific folder.
+- Right-click the sidebar to create a note or folder, or use Ctrl+N / Ctrl+Shift+N in the most recently selected folder. Click Notes above the note tree to return the creation location to the root. The highlighted folder shows where new notes will be created. Folder menus also let you create items inside a specific folder.
 - Edit the title to rename the file. Use the three-dot menu to move, rename, reload, or send a note or folder to the Windows Recycle Bin.
 - Write accepts Markdown. Read renders headings, lists, task checkboxes, links, quotes, code blocks, and tables.
 - Changes save automatically after a short pause, before navigation, and before closing. The top right shows save status.
@@ -42,7 +42,7 @@ Source is included in the Still folder. With Node.js installed: `npm install`, t
 - Drop onto Notes above the tree to move an item to the top level.
 - Drag Markdown files from Windows Explorer onto a folder to import copies. Originals stay where they are.
 - Drag the sidebar edge to resize it. Double-click the edge to reset. You can also focus the edge and use Left/Right.
-- Choose Change icon from any note or folder menu. Choose Use default icon to reset it.
+- Choose Change icon from a note menu. Choose Use default icon to reset it. Folders always use fixed closed/open icons and animate when expanded or collapsed; their icons cannot be customized.
 - Read/Write mode, sidebar width, order, and icons are remembered. Organization preferences are stored separately from your Markdown files.
 - Light mode has been removed. Motion respects Windows reduced-motion preferences.
 
@@ -55,6 +55,26 @@ Right-click empty sidebar space to create a top-level note or folder. Right-clic
 
 Click the folder name at the bottom of the sidebar to see your saved local notes folders. Choose one to switch, or choose **Open another folder** to add one. Still saves pending edits before switching and remembers the last note in each folder. Missing folders display an error without closing your current note.
 
-Download **Still-Setup-1.4.0.exe** from the private GitHub release. The installer lets you choose where to install and adds Start menu and desktop shortcuts. Your Markdown folders remain separate from the application. Uninstalling retains your app settings and notes.
+The Windows installer lets you choose where to install and adds Start menu and desktop shortcuts. Your Markdown folders remain separate from the application. Uninstalling retains your app settings and notes.
 
 Build an installer with `npm ci` followed by `npm run installer`. Run the folder-switching checks with `node tests/repositories.cjs`. Windows builds are unsigned.
+
+## Automatic updates (1.5)
+
+Install **Still-Setup-1.5.0.exe** once to enable automatic updates. The installed app checks the latest stable release in **tsunsora/still** ten seconds after launch and every four hours, downloads newer versions in the background, and shows **Restart to update** at the bottom of the sidebar. Clicking it saves pending edits and preferences before running the installer and reopening Still. You can also click **Check for updates**. A failed check can be retried; a failed note save prevents installation.
+
+The GitHub repository is private. Install GitHub CLI and run `gh auth login --hostname github.com` with an account that can read `tsunsora/still`. Alternatively, launch Still with a `GH_TOKEN` or `GITHUB_TOKEN` environment variable that has read access to that repository's contents. Credentials are obtained locally at runtime, stay in the main process, and are not included in the app or its update files. The portable build links to the latest installer; development and automated test runs do not contact GitHub.
+
+### Publishing an update
+
+1. Increase the version in `package.json` and `package-lock.json`.
+2. Build with `npm run installer`. Keep all three release files: `Still-Setup-VERSION.exe`, its `.exe.blockmap`, and `latest.yml`. The updater needs `latest.yml`, including the installer checksum.
+3. Publish those three files together in a stable GitHub release whose tag is `vVERSION`. Release 1.4.0 has no update metadata, so the first update-enabled release must include it.
+
+The included `.github/workflows/release.yml` builds, tests, and publishes these files when a matching version tag is pushed. Its GitHub Actions token is used only for publishing. Local builds never publish automatically.
+
+Run updater state-machine tests with `npm test`, and UI / save-before-update checks with `node tests/ui.cjs`. Set `STILL_EXE` to a packaged executable to run the UI tests against a build.
+
+Run folder animation, open/closed icon, and note-only icon customization checks with `node tests/folders.cjs`. These checks also cover older saved folder icons and reduced-motion preferences.
+
+For an optional live GitHub authentication/metadata check, set `STILL_EXE` to an installer-built executable and run `node tests/github-feed.cjs`. This check uses your local login but never downloads or installs an update.

@@ -23,14 +23,14 @@ function showMode(next){const changed=mode!==next;mode=next;if(changed)savePrefe
 function renderTree(){
  const tree=$('#tree');tree.replaceChildren();
  function add(nodes,depth=0,container=tree){for(const n of nodes){
-  const row=document.createElement('div');row.className='tree-row'+(n.path===active?' active':'')+(n.type==='folder'&&n.path===selectedFolder?' folder-selected':'');row.dataset.path=n.path;row.dataset.type=n.type;row.classList.toggle('custom-icon',!!state.icons?.[n.path]);row.style.paddingLeft=(depth*26)+'px';row.draggable=true;
+   const row=document.createElement('div');row.className='tree-row'+(n.path===active?' active':'')+(n.type==='folder'&&n.path===selectedFolder?' folder-selected':'');row.dataset.path=n.path;row.dataset.type=n.type;row.classList.toggle('custom-icon',n.type==='note'&&!!state.icons?.[n.path]);row.style.paddingLeft=(depth*26)+'px';row.draggable=true;
   const btn=document.createElement('button');btn.className='tree-open';btn.title=n.path;
   if(n.type==='folder'){const chevron=document.createElement('span');chevron.className='folder-chevron';chevron.innerHTML=icon(expanded.has(n.path)?'down':'right');btn.append(chevron);}else{const spacer=document.createElement('span');spacer.className='folder-chevron';btn.append(spacer);}
-  const glyph=document.createElement('span');glyph.className='item-icon';glyph.innerHTML=icon(state.icons?.[n.path]||(n.type==='folder'?'folder':'note'));btn.append(glyph);
+   const glyph=document.createElement('span');glyph.className='item-icon';glyph.innerHTML=icon(n.type==='folder'?'folder':state.icons?.[n.path]||'note');btn.append(glyph);
   let group;
   if(n.type==='folder'){
    row.classList.toggle('folder-expanded',expanded.has(n.path));
-   if(!state.icons?.[n.path]){glyph.classList.add('folder-glyph');glyph.innerHTML='<span class="folder-closed-icon">'+icon('folder')+'</span><span class="folder-open-icon">'+icon('folder-open')+'</span>';}
+    glyph.classList.add('folder-glyph');glyph.innerHTML='<span class="folder-closed-icon">'+icon('folder')+'</span><span class="folder-open-icon">'+icon('folder-open')+'</span>';
   }
   const label=document.createElement('span');label.className='label';label.textContent=n.name;btn.append(label);
   if(n.type==='folder')btn.setAttribute('aria-expanded',expanded.has(n.path));else if(n.path===active)btn.setAttribute('aria-current','page');
@@ -38,7 +38,6 @@ function renderTree(){
    selectedFolder=n.path;const open=!expanded.has(n.path);open?expanded.add(n.path):expanded.delete(n.path);
    tree.querySelectorAll('.folder-selected').forEach(el=>el.classList.remove('folder-selected'));row.classList.add('folder-selected');row.classList.toggle('folder-expanded',open);btn.setAttribute('aria-expanded',open);
    group.classList.toggle('is-open',open);group.inert=!open;
-   $('#new-note').title='New note in '+n.path+' (Ctrl + N)';$('#new-folder').title='New folder in '+n.path+' (Ctrl + Shift + N)';
   }else await openNote(n.path);});row.append(btn);
   const more=document.createElement('button');more.className='icon more';more.innerHTML=icon('more');more.setAttribute('aria-label','Options for '+n.name);more.onclick=e=>showMenu(e,n);row.append(more);row.oncontextmenu=e=>{e.preventDefault();showMenu(e,n);};
   row.ondragstart=e=>{draggedPath=n.path;e.dataTransfer.setData('application/x-still-path',n.path);e.dataTransfer.effectAllowed='move';row.classList.add('dragging');};
@@ -51,10 +50,9 @@ function renderTree(){
    const inner=document.createElement('div');inner.className='folder-children-inner';group.append(inner);container.append(group);add(n.children||[],depth+1,inner);
   }
  }}
- add(state.tree);if(!state.tree.length){const empty=document.createElement('p');empty.className='tree-empty';empty.textContent=state.root?'Create a note, or drop Markdown files here.':'Open a folder to get started.';tree.append(empty);}
- $('#new-note').disabled=false;$('#new-folder').disabled=false;$('#refresh').disabled=!state.root;
+  add(state.tree);if(!state.root){const empty=document.createElement('p');empty.className='tree-empty';empty.textContent='Open a folder to get started.';tree.append(empty);}
+  $('#refresh').disabled=!state.root;
  $('#folder-label').textContent='Notes';$('#folder-label').title='Click or drop here to use the top level';
- $('#new-note').title='New note in '+(selectedFolder||state.name||'a notes folder')+' (Ctrl + N)';$('#new-folder').title='New folder in '+(selectedFolder||state.name||'a notes folder')+' (Ctrl + Shift + N)';
  $('#workspace-name').textContent=state.name||'Open folder';$('#open-folder').title=state.root||'Open a notes folder';
 }
 async function flush(){clearTimeout(timer);const task=saving.catch(()=>{}).then(async()=>{while(dirty&&active){const file=active,content=editor.value;status('Saving…');try{await api('write',file,content);current=content;dirty=editor.value!==content;status(dirty?'Unsaved':'Saved');}catch(e){status('Not saved',true);throw e;}}});saving=task;return task;}
@@ -103,7 +101,7 @@ function showMenu(e,item=null){
  e.preventDefault();e.stopPropagation();contextReturnFocus=document.activeElement;
  const menu=$('#context');menu.replaceChildren();const parent=item?(item.type==='folder'?item.path:parentOf(item.path)):'';
  const items=[['New note',()=>create('note',parent),'compose'],['New folder',()=>create('folder',parent),'folder-plus']];
- if(item){if(item.type==='note')items.push(['Reload from disk',()=>reload(item),'refresh']);items.push(['Change icon…',()=>chooseIcon(item),'palette'],['Rename',()=>rename(item),'compose'],['Move to…',()=>move(item),'folder'],['Move to Recycle Bin',()=>trash(item),'archive']);}
+  if(item){if(item.type==='note')items.push(['Reload from disk',()=>reload(item),'refresh'],['Change icon…',()=>chooseIcon(item),'palette']);items.push(['Rename',()=>rename(item),'compose'],['Move to…',()=>move(item),'folder'],['Move to Recycle Bin',()=>trash(item),'archive']);}
  for(const [label,fn,glyph]of items){const button=document.createElement('button');button.innerHTML=icon(glyph);const text=document.createElement('span');text.textContent=label;button.append(text);button.setAttribute('role','menuitem');if(label.includes('Recycle'))button.className='danger';button.onclick=attempt(async()=>{menu.hidden=true;await fn();});menu.append(button);}
  menu.hidden=false;const bounds=e.target?.getBoundingClientRect?.();const x=e.clientX||bounds?.left||12,y=e.clientY||bounds?.bottom||80;
  menu.style.left=Math.max(8,Math.min(x,innerWidth-menu.offsetWidth-8))+'px';menu.style.top=Math.max(8,Math.min(y,innerHeight-menu.offsetHeight-8))+'px';menu.querySelector('button').focus();
@@ -118,7 +116,7 @@ $('#format-bar').querySelectorAll('button').forEach(b=>b.onclick=()=>format(b.da
 $('#note-title').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#note-title').blur();editor.focus();}if(e.key==='Escape'){$('#note-title').value=displayName(active);editor.focus();}});
 $('#note-title').addEventListener('blur',attempt(async()=>{if(active&&$('#note-title').value!==displayName(active)){try{await rename({path:active,name:displayName(active),type:'note'},$('#note-title').value);}finally{$('#note-title').value=displayName(active);}}}));
 $('#preview').addEventListener('click',attempt(async e=>{const link=e.target.closest('a');if(link){e.preventDefault();const href=link.getAttribute('href');if(/^https?:\/\//i.test(href))await api('external',href);else{const rel=decodeURIComponent(href.split('#')[0]);const target=flatten().find(n=>n.type==='note'&&(n.path.replaceAll('\\','/')===(parentOf(active)?parentOf(active).replaceAll('\\','/')+'/':'')+rel));if(target)await openNote(target.path);}}}));
-$('#new-note').onclick=attempt(()=>create('note'));$('#new-folder').onclick=attempt(()=>create('folder'));$('#open-folder').onclick=showRepositories;$('#welcome-open').onclick=attempt(choose);$('#welcome-new').onclick=attempt(()=>create('note',''));$('#folder-label').onclick=()=>{selectedFolder='';renderTree();};$('#refresh').onclick=attempt(async()=>{await flush();await refresh();if(active)await openNote(active);});$('#edit-mode').onclick=()=>showMode('edit');$('#preview-mode').onclick=()=>showMode('preview');$('#collapse').onclick=()=>toggleSidebar(true);$('#expand').onclick=()=>toggleSidebar(false);$('#note-menu').onclick=e=>{if(active)showMenu(e,{path:active,name:displayName(active),type:'note'});};
+$('#open-folder').onclick=showRepositories;$('#welcome-open').onclick=attempt(choose);$('#welcome-new').onclick=attempt(()=>create('note',''));$('#folder-label').onclick=()=>{selectedFolder='';renderTree();};$('#refresh').onclick=attempt(async()=>{await flush();await refresh();if(active)await openNote(active);});$('#edit-mode').onclick=()=>showMode('edit');$('#preview-mode').onclick=()=>showMode('preview');$('#collapse').onclick=()=>toggleSidebar(true);$('#expand').onclick=()=>toggleSidebar(false);$('#note-menu').onclick=e=>{if(active)showMenu(e,{path:active,name:displayName(active),type:'note'});};
 for(const action of ['minimize','maximize','close'])$('#'+action).onclick=attempt(()=>api('window',action));
 window.stillEvents.beforeClose(attempt(async()=>{await flush();await preferencesPending;await api('preferences',{mode,sidebarWidth});await api('ready-close');}));
 document.addEventListener('keydown',attempt(async e=>{if($('#modal').open||$('#icon-dialog').open||$('#repositories-dialog').open)return;if(e.ctrlKey){const key=e.key.toLowerCase();if(['s','n','b','i','e','\\'].includes(key)){e.preventDefault();if(key==='s')await flush();if(key==='n')await create(e.shiftKey?'folder':'note');if(key==='b')format('bold');if(key==='i')format('italic');if(key==='e')showMode(mode==='edit'?'preview':'edit');if(key==='\\')toggleSidebar(!$('#app').classList.contains('sidebar-hidden'));}}if(e.key==='Tab'&&e.target===editor){e.preventDefault();editor.setRangeText('  ',editor.selectionStart,editor.selectionEnd,'end');editor.dispatchEvent(new Event('input'));}}));
@@ -148,9 +146,31 @@ async function handleDrop(e,parent,anchor,position){
 }
 for(const zone of [$('#tree'),$('#folder-label')]){zone.ondragover=e=>{if(!acceptsDrop(e)||e.target.closest('.tree-row'))return;e.preventDefault();clearDropIndicators();zone.classList.add('drop-into');e.dataTransfer.dropEffect=draggedPath?'move':'copy';};zone.ondragleave=e=>{if(!zone.contains(e.relatedTarget))zone.classList.remove('drop-into');};zone.ondrop=attempt(async e=>{if(e.target.closest('.tree-row'))return;e.preventDefault();e.stopPropagation();clearDropIndicators();await handleDrop(e,'','','after');});}
 document.addEventListener('dragover',e=>{if(e.dataTransfer.types.includes('Files'))e.preventDefault();});document.addEventListener('drop',e=>{e.preventDefault();});
-async function chooseIcon(item){const dialog=$('#icon-dialog');$('#icon-for').textContent=item.name;const grid=$('#icon-grid');grid.replaceChildren();for(const id of iconCatalog){const b=document.createElement('button');b.type='button';b.className='icon-choice';b.innerHTML=icon(id);b.title=id.charAt(0).toUpperCase()+id.slice(1);b.setAttribute('aria-label',b.title);b.setAttribute('aria-pressed',state.icons?.[item.path]===id);b.onclick=attempt(async()=>{state.icons=await api('set-icon',item.path,id);renderTree();dialog.close();});grid.append(b);}$('#icon-default').onclick=attempt(async()=>{state.icons=await api('set-icon',item.path,null);renderTree();dialog.close();});$('#icon-close').onclick=()=>dialog.close();dialog.showModal();}
+async function chooseIcon(item){if(item.type!=='note')return;const dialog=$('#icon-dialog');$('#icon-for').textContent=item.name;const grid=$('#icon-grid');grid.replaceChildren();for(const id of iconCatalog){const b=document.createElement('button');b.type='button';b.className='icon-choice';b.innerHTML=icon(id);b.title=id.charAt(0).toUpperCase()+id.slice(1);b.setAttribute('aria-label',b.title);b.setAttribute('aria-pressed',state.icons?.[item.path]===id);b.onclick=attempt(async()=>{state.icons=await api('set-icon',item.path,id);renderTree();dialog.close();});grid.append(b);}$('#icon-default').onclick=attempt(async()=>{state.icons=await api('set-icon',item.path,null);renderTree();dialog.close();});$('#icon-close').onclick=()=>dialog.close();dialog.showModal();}
 attempt(async()=>{state=await api('init');mode=state.mode||'edit';sidebarWidth=state.sidebarWidth||280;applySidebarWidth();renderTree();const note=flatten().find(n=>n.path===state.last)||flatten().find(n=>n.type==='note');if(note)await openNote(note.path);})();
 
 function updateWindowControls(state){const maximized=state.maximized;const button=$('#maximize');button.title=maximized?'Restore down':'Maximize';button.setAttribute('aria-label',button.title);button.innerHTML=maximized?'<svg class="caption-icon" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 3.5v-2h6.5V8h-2"/><rect x="1.5" y="4" width="6.5" height="6.5"/></svg>':'<svg class="caption-icon" viewBox="0 0 12 12" aria-hidden="true"><rect x="1.5" y="1.5" width="9" height="9"/></svg>';document.body.classList.toggle('window-maximized',maximized);}
 window.stillEvents.windowState(updateWindowControls);
 attempt(async()=>updateWindowControls(await api('window-state')))();
+
+let updateState={status:'idle'},installingUpdate=false;
+function renderUpdate(next){
+ updateState=next;const button=$('#app-update');
+ button.hidden=next.status==='disabled'&&next.reason==='development';
+ button.disabled=['checking','downloading','installing'].includes(next.status)||installingUpdate;
+ button.classList.toggle('update-ready',next.status==='ready');
+ const labels={idle:'Check for updates',checking:'Checking for updates…',current:'Up to date · Check again',downloading:`Downloading update · ${next.percent}%`,ready:'Restart to update',installing:'Installing update…',error:'Retry update check',disabled:'Install for auto-updates'};
+ $('#update-label').textContent=labels[next.status]||labels.idle;
+ button.setAttribute('aria-label',labels[next.status]||labels.idle);
+ button.title=next.message||(next.status==='ready'?`Install Still ${next.version} and restart`:next.status==='disabled'?'Open the latest Still installer on GitHub':'Updates from tsunsora/still on GitHub');
+}
+window.stillEvents.updateState(renderUpdate);
+$('#app-update').onclick=attempt(async()=>{
+ if(updateState.status==='disabled'){await api('external','https://github.com/tsunsora/still/releases/latest');return;}
+ if(updateState.status==='ready'){
+  installingUpdate=true;document.body.inert=true;renderUpdate(updateState);
+  try{await flush();await preferencesPending;await api('preferences',{mode,sidebarWidth});await api('install-update');}
+  finally{installingUpdate=false;document.body.inert=false;renderUpdate(updateState);}
+ }else{const next=await api('check-updates');renderUpdate(next);if(next.status==='error')toast(next.message);}
+});
+attempt(async()=>renderUpdate(await api('update-state')))();
