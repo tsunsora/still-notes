@@ -1,18 +1,32 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeTheme } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeTheme, screen } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { pathToFileURL } = require('node:url');
 const {createUpdates}=require('./updates.cjs');
-if (process.env.STILL_TEST_DATA) app.setPath('userData', process.env.STILL_TEST_DATA);
+const {normalizeWorkspaceState,remapWorkspaceState,removeWorkspacePaths,restoreWindowState}=require('./session-state.cjs');
+app.setName('Still Notes');
+// Keep the existing profile across the product rename so upgrades retain all
+// repositories, note metadata, and saved window/workspace state.
+app.setPath('userData',process.env.STILL_TEST_DATA||path.join(app.getPath('appData'),'Still'));
 let win, updates, root = '', settings = {}, closing = false;
 const revisions = new Map();
 const hash = s => crypto.createHash('sha256').update(s).digest('hex');
 const cfg = () => path.join(app.getPath('userData'), 'settings.json');
 let settingsWrites=Promise.resolve();
 function saveSettings() {const value=JSON.stringify(settings);const op=settingsWrites.catch(()=>{}).then(async()=>{await fs.mkdir(app.getPath('userData'),{recursive:true});await fs.writeFile(cfg()+'.tmp',value);await fs.rename(cfg()+'.tmp',cfg());});settingsWrites=op;return op;}
+let windowSaveTimer;
+function captureWindowState(){
+ if(win&&!win.isDestroyed()&&!win.isMinimized())settings.window={bounds:win.getNormalBounds(),maximized:win.isMaximized()};
+}
+function queueWindowSave(){
+ if(closing)return;
+ captureWindowState();clearTimeout(windowSaveTimer);
+ windowSaveTimer=setTimeout(()=>{saveSettings().catch(error=>console.error('Could not save window state:',error.message));},250);
+}
+async function persistWindowState(){clearTimeout(windowSaveTimer);captureWindowState();await saveSettings();}
 function workspaceMeta(){settings.workspaces??={};const key=hash(root.toLowerCase());settings.workspaces[key]??={icons:[],orders:[]};return settings.workspaces[key];}
-function migrateMeta(old,next){const m=workspaceMeta();const mapped=p=>p===old?next:p.startsWith(old+path.sep)?next+p.slice(old.length):p;m.icons=m.icons.map(([p,i])=>[mapped(p),i]);m.orders=m.orders.map(([p,items])=>[mapped(p),items.map(mapped)]);if(settings.last===old||settings.last?.startsWith(old+path.sep))settings.last=mapped(settings.last);}
+function migrateMeta(old,next){const m=workspaceMeta();const mapped=p=>p===old?next:p.startsWith(old+path.sep)?next+p.slice(old.length):p;m.icons=m.icons.map(([p,i])=>[mapped(p),i]);m.orders=m.orders.map(([p,items])=>[mapped(p),items.map(mapped)]);if(settings.last)settings.last=mapped(settings.last);if(m.last)m.last=mapped(m.last);if(m.session)m.session=remapWorkspaceState(m.session,old,next);}
 async function safe(relative = '', exists = true) {
   if (!root || typeof relative !== 'string' || path.isAbsolute(relative)) throw Error('Choose a notes folder first.');
   const target = path.resolve(root, relative);
@@ -46,7 +60,7 @@ async function activateRoot(next){
  try{const result=await snapshot();rememberRoot();await saveSettings();revisions.clear();return {...result,repositories:settings.repositories};}
  catch(error){root=previous.root;settings.root=root;settings.last=previous.last;throw error;}
 }
-async function snapshot() { return {root, repositories:settings.repositories||[],name:root ? path.basename(root) : '', tree:root ? await scan() : [], last:settings.last || '', mode:settings.mode==='preview'?'preview':'edit',sidebarWidth:settings.sidebarWidth||280,icons:root?Object.fromEntries(workspaceMeta().icons):{}}; }
+async function snapshot() { return {root, repositories:settings.repositories||[],name:root ? path.basename(root) : '', tree:root ? await scan() : [], last:settings.last || '', mode:settings.mode==='preview'?'preview':'edit',sidebarWidth:settings.sidebarWidth||280,sidebarHidden:settings.sidebarHidden===true,session:root?normalizeWorkspaceState(workspaceMeta().session):null,icons:root?Object.fromEntries(workspaceMeta().icons):{}}; }
 function handle(name, fn) { ipcMain.handle(name, async (event,...args) => {
   if (event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame) throw Error('Invalid request.');
   try { return {ok:true, value:await fn(...args)}; } catch (err) { return {ok:false,error:err.message}; }
@@ -58,6 +72,18 @@ handle('choose', async () => {
   return activateRoot(result.filePaths[0]);
 });
 handle('switch-repository',async next=>{if(typeof next!=='string'||!settings.repositories?.includes(next))throw Error('Choose a saved notes folder.');return activateRoot(next);});
+handle('remove-repository',async folder=>{
+ if(typeof folder!=='string'||!settings.repositories?.includes(folder))throw Error('Choose a saved notes folder.');
+ await writes;
+ const closed=(root||settings.root||'').toLowerCase()===folder.toLowerCase();
+ const previous={root,settingsRoot:settings.root,last:settings.last,repositories:settings.repositories};
+ if(closed){if(root)workspaceMeta().last=settings.last||'';root='';settings.root='';settings.last='';}
+ settings.repositories=settings.repositories.filter(value=>value!==folder);
+ try{await saveSettings();}
+ catch(error){root=previous.root;settings.root=previous.settingsRoot;settings.last=previous.last;settings.repositories=previous.repositories;throw error;}
+ if(closed)revisions.clear();
+ return {repositories:settings.repositories,closed};
+});
 handle('read', async rel => {
   if (!/\.md$/i.test(rel)) throw Error('Only Markdown notes can be opened.');
   const file = await safe(rel); const stat = await fs.stat(file);
@@ -114,28 +140,38 @@ handle('place',async(rel,parent,anchor='',position='after')=>{
 handle('set-icon',async(rel,id)=>{const file=await safe(rel);if(!(await fs.stat(file)).isFile()||!/\.md$/i.test(rel))throw Error('Only note icons can be changed.');const catalog=require('./icon-catalog.json');if(id!==null&&!catalog.includes(id))throw Error('Unknown icon.');const m=workspaceMeta();const icons=new Map(m.icons);id===null?icons.delete(rel):icons.set(rel,id);m.icons=Array.from(icons);await saveSettings();return Object.fromEntries(icons);});
 handle('import',async(files,parent)=>{if(!Array.isArray(files)||files.length>100)throw Error('Drop up to 100 Markdown files at a time.');await safe(parent);const imported=[];for(const source of files){if(typeof source!=='string'||!path.isAbsolute(source)||!source.toLowerCase().endsWith('.md'))throw Error('Only Markdown (.md) files can be imported.');const stat=await fs.stat(source);if(!stat.isFile()||stat.size>8*1024*1024)throw Error('Each note must be a file under 8 MB.');}
   for(const source of files){const original=path.basename(source);let name=original,index=2;for(;;){const rel=path.join(parent,name);try{await fs.copyFile(source,await safe(rel,false),require('node:fs').constants.COPYFILE_EXCL);imported.push(rel);break;}catch(e){if(e.code!=='EEXIST')throw e;name=path.basename(original,'.md')+' ('+index+++').md';}}}return {paths:imported,tree:await scan()};});
-handle('preferences',async values=>{if(values.mode==='edit'||values.mode==='preview')settings.mode=values.mode;if(Number.isFinite(values.sidebarWidth))settings.sidebarWidth=Math.round(Math.max(220,Math.min(480,values.sidebarWidth)));delete settings.theme;await saveSettings();return true;});
-handle('trash', async rel => { if(!rel) throw Error('Cannot remove the notes folder.'); await shell.trashItem(await safe(rel));const m=workspaceMeta();const keep=p=>p!==rel&&!p.startsWith(rel+path.sep);m.icons=m.icons.filter(([p])=>keep(p));m.orders=m.orders.filter(([p])=>keep(p)).map(([p,items])=>[p,items.filter(keep)]);revisions.clear();await saveSettings();return true; });
+handle('preferences',async values=>{
+ if(values.mode==='edit'||values.mode==='preview')settings.mode=values.mode;
+ if(Number.isFinite(values.sidebarWidth))settings.sidebarWidth=Math.round(Math.max(220,Math.min(480,values.sidebarWidth)));
+ if(typeof values.sidebarHidden==='boolean')settings.sidebarHidden=values.sidebarHidden;
+ if(root&&values.workspaceRoot===root&&values.session){const session=normalizeWorkspaceState(values.session);if(session)workspaceMeta().session=session;}
+ delete settings.theme;await saveSettings();return true;
+});
+handle('trash', async rel => { if(!rel) throw Error('Cannot remove the notes folder.'); await shell.trashItem(await safe(rel));const m=workspaceMeta();const keep=p=>p!==rel&&!p.startsWith(rel+path.sep);m.icons=m.icons.filter(([p])=>keep(p));m.orders=m.orders.filter(([p])=>keep(p)).map(([p,items])=>[p,items.filter(keep)]);if(m.session)m.session=removeWorkspacePaths(m.session,rel);if(settings.last&&!keep(settings.last))settings.last='';if(m.last&&!keep(m.last))m.last='';revisions.clear();await saveSettings();return true; });
 handle('reveal', async () => {if(root) await shell.openPath(root);});
 handle('external', async url => {if(typeof url==='string' && /^https?:\/\//i.test(url)) await shell.openExternal(url);});
 handle('window', async action => {if(action==='minimize')win.minimize();if(action==='maximize')win.isMaximized()?win.unmaximize():win.maximize();if(action==='close')win.close();});
 handle('window-state',async()=>({maximized:win.isMaximized()}));
-handle('ready-close', async () => {await writes;await settingsWrites; closing=true;win.close();});
+handle('ready-close', async () => {await writes;await persistWindowState();await settingsWrites;closing=true;win.close();});
 handle('update-state',()=>updates.snapshot());
 handle('check-updates',()=>updates.check());
 handle('install-update',()=>updates.install());
 app.whenReady().then(async()=>{
   try {settings=JSON.parse(await fs.readFile(cfg(),'utf8'));}catch{settings={};}
-  if(!settings.root){const initial=process.env.STILL_TEST_NOTES||path.join(app.getPath('documents'),'Still Notes');await fs.mkdir(initial,{recursive:true});settings.root=await fs.realpath(initial);await saveSettings();}
-  try{root=await fs.realpath(settings.root);}catch{root='';}
+   // An explicit empty root means the user removed the active saved folder.
+   if(typeof settings.root!=='string'){const initial=process.env.STILL_TEST_NOTES||path.join(app.getPath('documents'),'Still Notes');await fs.mkdir(initial,{recursive:true});settings.root=await fs.realpath(initial);await saveSettings();}
+   try{root=settings.root?await fs.realpath(settings.root):'';}catch{root='';}
   rememberRoot();await saveSettings();
   // Native acrylic blurs the desktop once, beneath our shared translucent surface.
   // Keep a solid charcoal fallback on systems without Windows 11 backdrop support.
   const acrylic=process.platform==='win32'&&Number(require('node:os').release().split('.')[2])>=22621;
   nativeTheme.themeSource='dark';
-  win=new BrowserWindow({width:1220,height:820,minWidth:680,minHeight:480,title:'Still',icon:path.join(__dirname,'icon.ico'),backgroundColor:acrylic?'#00000000':'#1c2326',backgroundMaterial:acrylic?'acrylic':'none',frame:false,show:false,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+  const restoredWindow=restoreWindowState(settings.window,screen.getAllDisplays(),screen.getPrimaryDisplay());
+  settings.window=restoredWindow;
+  win=new BrowserWindow({...restoredWindow.bounds,minWidth:Math.min(680,restoredWindow.bounds.width),minHeight:Math.min(480,restoredWindow.bounds.height),title:'Still Notes',icon:path.join(__dirname,'icon.ico'),backgroundColor:acrylic?'#00000000':'#1c2326',backgroundMaterial:acrylic?'acrylic':'none',frame:false,show:false,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
   Menu.setApplicationMenu(null);
   for(const event of ['maximize','unmaximize'])win.on(event,()=>win.webContents.send('window-state',{maximized:win.isMaximized()}));
+  for(const event of ['resize','move','maximize','unmaximize','restore'])win.on(event,queueWindowSave);
   win.webContents.session.setPermissionRequestHandler((_w,_p,cb)=>cb(false));
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
   win.webContents.on('will-navigate',event=>event.preventDefault());
@@ -146,9 +182,9 @@ app.whenReady().then(async()=>{
    disabledReason,
    updater:disabledReason?null:require('electron-updater').autoUpdater,
    notify:state=>{if(!win.isDestroyed())win.webContents.send('update-state',state);},
-   beforeInstall:async()=>{await writes;await settingsWrites;closing=true;},
+    beforeInstall:async()=>{await writes;await persistWindowState();await settingsWrites;closing=true;},
    installFailed:()=>{closing=false;}
   });
-  await win.loadURL(pathToFileURL(path.join(__dirname,'index.html')).href);win.show();updates.start();
+  await win.loadURL(pathToFileURL(path.join(__dirname,'index.html')).href);if(restoredWindow.maximized)win.maximize();win.show();updates.start();
 });
-app.on('window-all-closed',()=>{updates?.stop();app.quit();});
+app.on('window-all-closed',()=>{clearTimeout(windowSaveTimer);updates?.stop();app.quit();});

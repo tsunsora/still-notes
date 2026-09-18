@@ -4,10 +4,11 @@ import {icons,iconCatalog} from './icons.js';
 function icon(name){return icons[name]||icons.note;}
 document.querySelectorAll('[data-icon]').forEach(el=>el.innerHTML=icon(el.dataset.icon));
 let state={root:'',tree:[]}, active='', current='', dirty=false, timer, mode='edit', selectedFolder='', expanded=new Set(), saving=Promise.resolve(), busy=false, toastTimer;
+let sessionTimer,sessionReady=false,restoringSession=false;
 const editor=$('#editor');
 const reduced=matchMedia('(prefers-reduced-motion: reduce)');
 function animateContent(){if(!reduced.matches)$('.page').animate([{opacity:.3,transform:'translateY(7px)'},{opacity:1,transform:'translateY(0)'}],{duration:190,easing:'cubic-bezier(.2,.8,.2,1)'});}
-function toggleSidebar(hide){$('#app').classList.toggle('sidebar-hidden',hide);$('#sidebar').inert=hide;}
+function toggleSidebar(hide,persist=true){$('#app').classList.toggle('sidebar-hidden',hide);$('#sidebar').inert=hide;if(persist){savePreferences({sidebarHidden:hide});scheduleSessionSave();}}
 
 async function api(name,...args){const r=await window.still[name](...args);if(!r.ok)throw Error(r.error);return r.value;}
 function toast(message){$('#toast').textContent=message;$('#toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').hidden=true,9000);}
@@ -21,7 +22,7 @@ function count(){const n=editor.value.trim()?editor.value.trim().split(/\s+/).le
 function renderPreview(){const html=marked.parse(editor.value,{gfm:true,breaks:true});$('#preview').innerHTML=DOMPurify.sanitize(html,{FORBID_TAGS:['style','iframe','form','button'],FORBID_ATTR:['style']});$('#preview').querySelectorAll('input').forEach(input=>{if(input.type!=='checkbox')input.remove();else input.disabled=true;});}
 function showMode(next){const changed=mode!==next;mode=next;if(changed)savePreferences({mode});$('#editor').hidden=next!=='edit';$('#preview').hidden=next!=='preview';$('#format-bar').hidden=next!=='edit';$('#edit-mode').classList.toggle('selected',next==='edit');$('#preview-mode').classList.toggle('selected',next==='preview');$('#edit-mode').setAttribute('aria-pressed',next==='edit');$('#preview-mode').setAttribute('aria-pressed',next==='preview');if(next==='preview')renderPreview();else resize();if(changed)animateContent();}
 function renderTree(){
- const tree=$('#tree');tree.replaceChildren();
+ const tree=$('#tree'),scroll=tree.scrollTop;tree.replaceChildren();
  function add(nodes,depth=0,container=tree){for(const n of nodes){
    const row=document.createElement('div');row.className='tree-row'+(n.path===active?' active':'')+(n.type==='folder'&&n.path===selectedFolder?' folder-selected':'');row.dataset.path=n.path;row.dataset.type=n.type;row.classList.toggle('custom-icon',n.type==='note'&&!!state.icons?.[n.path]);row.style.paddingLeft=(depth*26)+'px';row.draggable=true;
   const btn=document.createElement('button');btn.className='tree-open';btn.title=n.path;
@@ -37,7 +38,8 @@ function renderTree(){
   btn.onclick=attempt(async()=>{if(n.type==='folder'){
    selectedFolder=n.path;const open=!expanded.has(n.path);open?expanded.add(n.path):expanded.delete(n.path);
    tree.querySelectorAll('.folder-selected').forEach(el=>el.classList.remove('folder-selected'));row.classList.add('folder-selected');row.classList.toggle('folder-expanded',open);btn.setAttribute('aria-expanded',open);
-   group.classList.toggle('is-open',open);group.inert=!open;
+    group.classList.toggle('is-open',open);group.inert=!open;
+    scheduleSessionSave();
   }else await openNote(n.path);});row.append(btn);
   const more=document.createElement('button');more.className='icon more';more.innerHTML=icon('more');more.setAttribute('aria-label','Options for '+n.name);more.onclick=e=>showMenu(e,n);row.append(more);row.oncontextmenu=e=>{e.preventDefault();showMenu(e,n);};
   row.ondragstart=e=>{draggedPath=n.path;e.dataTransfer.setData('application/x-still-path',n.path);e.dataTransfer.effectAllowed='move';row.classList.add('dragging');};
@@ -53,22 +55,52 @@ function renderTree(){
   add(state.tree);if(!state.root){const empty=document.createElement('p');empty.className='tree-empty';empty.textContent='Open a folder to get started.';tree.append(empty);}
   $('#refresh').disabled=!state.root;
  $('#folder-label').textContent='Notes';$('#folder-label').title='Click or drop here to use the top level';
- $('#workspace-name').textContent=state.name||'Open folder';$('#open-folder').title=state.root||'Open a notes folder';
+  $('#workspace-name').textContent=state.name||'Open folder';$('#open-folder').title=state.root||'Open a notes folder';
+  tree.scrollTop=scroll;
 }
 async function flush(){clearTimeout(timer);const task=saving.catch(()=>{}).then(async()=>{while(dirty&&active){const file=active,content=editor.value;status('Saving…');try{await api('write',file,content);current=content;dirty=editor.value!==content;status(dirty?'Unsaved':'Saved');}catch(e){status('Not saved',true);throw e;}}});saving=task;return task;}
-async function openNote(rel){if(busy)return;busy=true;try{await flush();const content=await api('read',rel);active=rel;current=content;editor.value=content;dirty=false;selectedFolder=parentOf(rel);for(let p=selectedFolder;p;p=parentOf(p))expanded.add(p);$('#welcome').hidden=true;$('#document').hidden=false;$('#note-title').value=displayName(rel);$('#breadcrumb').textContent=rel.replaceAll('\\',' / ').replace(/\.md$/i,'');status('Saved');count();showMode(mode);renderTree();$('#writing-area').scrollTop=0;animateContent();}finally{busy=false;}}
-function clearNote(){active='';current='';dirty=false;editor.value='';$('#document').hidden=true;$('#welcome').hidden=false;$('#breadcrumb').textContent='Still';}
-async function refresh(){state=await api('init');renderTree();}
-async function choose(){await flush();const result=await api('choose');if(!result)return;clearNote();state=result;expanded.clear();selectedFolder='';renderTree();const first=flatten().find(n=>n.path===state.last&&n.type==='note')||flatten().find(n=>n.type==='note');if(first)await openNote(first.path);}
-function showRepositories(){
- const dialog=$('#repositories-dialog'),list=$('#repositories-list');list.replaceChildren();$('#repositories-error').hidden=true;
- for(const folder of state.repositories||[]){const button=document.createElement('button');button.className='repository-option';button.setAttribute('aria-current',folder===state.root?'true':'false');
- const glyph=document.createElement('span');glyph.innerHTML=icon('folder');const text=document.createElement('span');const name=document.createElement('strong');name.textContent=folder.split(/[\\/]/).pop();const location=document.createElement('small');location.textContent=folder;text.append(name,location);button.append(glyph,text);
- button.onclick=async()=>{button.disabled=true;try{await flush();const next=await api('switch-repository',folder);clearNote();state=next;selectedFolder='';expanded.clear();renderTree();const note=flatten().find(n=>n.path===state.last&&n.type==='note')||flatten().find(n=>n.type==='note');if(note)await openNote(note.path);dialog.close();}catch(error){$('#repositories-error').textContent=error.message;$('#repositories-error').hidden=false;}finally{button.disabled=false;}};list.append(button);}
- dialog.showModal();
+async function openNote(rel,{reveal=true,preserveView=false}={}){if(busy)return;busy=true;const view=preserveView?captureNoteView():null;try{await flush();const content=await api('read',rel);active=rel;current=content;editor.value=content;dirty=false;if(reveal){selectedFolder=parentOf(rel);for(let p=selectedFolder;p;p=parentOf(p))expanded.add(p);}$('#welcome').hidden=true;$('#document').hidden=false;$('#note-title').value=displayName(rel);$('#breadcrumb').textContent=rel.replaceAll('\\',' / ').replace(/\.md$/i,'');status('Saved');count();showMode(mode);renderTree();if(view)restoreNoteView(view);else{editor.setSelectionRange(0,0);$('#writing-area').scrollTop=0;}animateContent();scheduleSessionSave();}finally{busy=false;}}
+function clearNote(){active='';current='';dirty=false;editor.value='';$('#document').hidden=true;$('#welcome').hidden=false;$('#breadcrumb').textContent='Still Notes';}
+async function refresh(){state=await api('init');pruneTreeState();renderTree();scheduleSessionSave();}
+async function choose(){await flush();await persistSession();const result=await api('choose');if(result)await restoreWorkspace(result);}
+let repositoryBusy=false;
+async function repositoryAction(action){
+ if(repositoryBusy)return;
+ repositoryBusy=true;$('#repositories-error').hidden=true;
+ $('#repositories-dialog').querySelectorAll('button').forEach(button=>button.disabled=true);
+ try{await action();}
+ catch(error){$('#repositories-error').textContent=error.message;$('#repositories-error').hidden=false;}
+ finally{repositoryBusy=false;$('#repositories-dialog').querySelectorAll('button').forEach(button=>button.disabled=false);}
 }
+function renderRepositories(){
+ const dialog=$('#repositories-dialog'),list=$('#repositories-list');list.replaceChildren();$('#repositories-error').hidden=true;
+ for(const [index,folder] of (state.repositories||[]).entries()){
+ const row=document.createElement('div');row.className='repository-row';
+ const button=document.createElement('button');button.className='repository-option';button.setAttribute('aria-current',folder===state.root?'true':'false');
+ const glyph=document.createElement('span');glyph.innerHTML=icon('folder');const text=document.createElement('span');const name=document.createElement('strong');name.textContent=folder.split(/[\\/]/).pop();const location=document.createElement('small');location.textContent=folder;text.append(name,location);button.append(glyph,text);
+ button.onclick=()=>repositoryAction(async()=>{await flush();await persistSession();const next=await api('switch-repository',folder);await restoreWorkspace(next);dialog.close();});
+ const remove=document.createElement('button');remove.type='button';remove.className='icon repository-remove';remove.innerHTML=icon('x');remove.title='Remove from list';remove.setAttribute('aria-label','Remove '+name.textContent+' from list');
+ remove.onclick=async()=>{
+  let removed=false;
+   await repositoryAction(async()=>{
+    const confirmed=await modal({title:'Remove repository?',description:`Remove “${name.textContent}” from the saved folders list? The folder and its notes will stay on disk.`,confirm:true,submit:'Remove'});
+    if(!confirmed)return;
+    if(folder===state.root){await flush();await persistSession();}
+   const result=await api('remove-repository',folder);state.repositories=result.repositories;
+   if(result.closed)await restoreWorkspace({...state,root:'',name:'',tree:[],last:'',icons:{},session:null,mode});
+   renderRepositories();removed=true;
+  });
+   if(removed){const options=list.querySelectorAll('.repository-option');(options[Math.min(index,options.length-1)]||$('#repository-add')).focus();}
+   else remove.focus();
+ };
+ row.append(button,remove);list.append(row);
+ }
+ if(!list.children.length){const empty=document.createElement('p');empty.className='repositories-empty';empty.textContent='No saved folders. Open a folder to add it here.';list.append(empty);}
+}
+function showRepositories(){renderRepositories();$('#repositories-dialog').showModal();}
+$('#repositories-dialog').addEventListener('cancel',event=>{if(repositoryBusy)event.preventDefault();});
 $('#repositories-close').onclick=()=>$('#repositories-dialog').close();
-$('#repository-add').onclick=attempt(async()=>{await choose();$('#repositories-dialog').close();});
+$('#repository-add').onclick=()=>repositoryAction(async()=>{await choose();$('#repositories-dialog').close();});
 function modal({title,description='',value='',submit='Create',folders=null,confirm=false,onSubmit=null}){return new Promise(resolve=>{
  const d=$('#modal');if(d.open){resolve(null);return;}
  $('#modal-title').textContent=title;$('#modal-description').textContent=description;$('#modal-description').hidden=!description;$('#modal-input').value=value;$('#modal-input').hidden=!!folders||confirm;$('#modal-label').hidden=!!folders||confirm;$('#modal-select').hidden=!folders;$('#modal-submit').textContent=submit;$('#modal-error').hidden=true;
@@ -90,11 +122,11 @@ async function create(type,parent=selectedFolder){
  const result=await modal({title:type==='folder'?'New folder':'New note',description:'Save in '+(parent?parent.replaceAll('\\',' / '):state.name),value:suggested,onSubmit:name=>api('create',parent,name,type)});
  if(result===null)return;state.tree=result.tree;if(parent)expanded.add(parent);
  if(type==='note'){showMode('edit');await openNote(result.path);editor.focus();}
- else{selectedFolder=result.path;expanded.add(result.path);renderTree();toast('Folder created. New notes will be saved here.');}
+  else{selectedFolder=result.path;expanded.add(result.path);renderTree();scheduleSessionSave();toast('Folder created. New notes will be saved here.');}
 }
-async function rename(item, provided){await flush();const name=provided??await modal({title:'Rename '+(item.type==='folder'?'folder':'note'),value:item.name,submit:'Rename'});if(name===null)return;const next=await api('rename',item.path,name);const newActive=active===item.path?next:active.startsWith(item.path+'\\')?next+active.slice(item.path.length):active;if(item.type==='folder')expanded.add(next);await refresh();if(newActive)await openNote(newActive);}
-async function move(item){await flush();const folders=['',...flatten().filter(n=>n.type==='folder'&&n.path!==item.path&&!n.path.startsWith(item.path+'\\')).map(n=>n.path)];const parent=await modal({title:'Move '+item.name,submit:'Move',folders});if(parent===null)return;const next=await api('move',item.path,parent);const newActive=active===item.path?next:active.startsWith(item.path+'\\')?next+active.slice(item.path.length):active;expanded.add(parent);await refresh();if(newActive)await openNote(newActive);}
-async function trash(item){await flush();const answer=await modal({title:'Move to Recycle Bin?',description:item.type==='folder'?`“${item.name}” and everything inside it will be moved to the Recycle Bin.`:`“${item.name}” will be moved to the Recycle Bin.`,confirm:true,submit:'Move to Recycle Bin'});if(!answer)return;await api('trash',item.path);if(active===item.path||active.startsWith(item.path+'\\'))clearNote();else if(active)await openNote(active);selectedFolder='';await refresh();}
+async function rename(item, provided){await flush();const name=provided??await modal({title:'Rename '+(item.type==='folder'?'folder':'note'),value:item.name,submit:'Rename'});if(name===null)return;await persistSession();const next=await api('rename',item.path,name);const newActive=active===item.path?next:active.startsWith(item.path+'\\')?next+active.slice(item.path.length):active;remapTreeState(item.path,next);await refresh();if(newActive)await openNote(newActive,{reveal:false,preserveView:true});}
+async function move(item){await flush();const folders=['',...flatten().filter(n=>n.type==='folder'&&n.path!==item.path&&!n.path.startsWith(item.path+'\\')).map(n=>n.path)];const parent=await modal({title:'Move '+item.name,submit:'Move',folders});if(parent===null)return;await persistSession();const next=await api('move',item.path,parent);const newActive=active===item.path?next:active.startsWith(item.path+'\\')?next+active.slice(item.path.length):active;remapTreeState(item.path,next);expanded.add(parent);await refresh();if(newActive)await openNote(newActive,{reveal:false,preserveView:true});}
+async function trash(item){await flush();const answer=await modal({title:'Move to Recycle Bin?',description:item.type==='folder'?`“${item.name}” and everything inside it will be moved to the Recycle Bin.`:`“${item.name}” will be moved to the Recycle Bin.`,confirm:true,submit:'Move to Recycle Bin'});if(!answer)return;await persistSession();await api('trash',item.path);if(active===item.path||active.startsWith(item.path+'\\'))clearNote();else if(active)await openNote(active,{reveal:false,preserveView:true});selectedFolder='';await refresh();}
 async function reload(item){if(dirty&&active===item.path){const answer=await modal({title:'Reload from disk?',description:'Unsaved edits in this note will be discarded. Copy anything you want to keep before continuing.',confirm:true,submit:'Reload'});if(!answer)return;clearTimeout(timer);await saving.catch(()=>{});dirty=false;}await openNote(item.path);}
 let contextReturnFocus=null;
 function showMenu(e,item=null){
@@ -116,14 +148,39 @@ $('#format-bar').querySelectorAll('button').forEach(b=>b.onclick=()=>format(b.da
 $('#note-title').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#note-title').blur();editor.focus();}if(e.key==='Escape'){$('#note-title').value=displayName(active);editor.focus();}});
 $('#note-title').addEventListener('blur',attempt(async()=>{if(active&&$('#note-title').value!==displayName(active)){try{await rename({path:active,name:displayName(active),type:'note'},$('#note-title').value);}finally{$('#note-title').value=displayName(active);}}}));
 $('#preview').addEventListener('click',attempt(async e=>{const link=e.target.closest('a');if(link){e.preventDefault();const href=link.getAttribute('href');if(/^https?:\/\//i.test(href))await api('external',href);else{const rel=decodeURIComponent(href.split('#')[0]);const target=flatten().find(n=>n.type==='note'&&(n.path.replaceAll('\\','/')===(parentOf(active)?parentOf(active).replaceAll('\\','/')+'/':'')+rel));if(target)await openNote(target.path);}}}));
-$('#open-folder').onclick=showRepositories;$('#welcome-open').onclick=attempt(choose);$('#welcome-new').onclick=attempt(()=>create('note',''));$('#folder-label').onclick=()=>{selectedFolder='';renderTree();};$('#refresh').onclick=attempt(async()=>{await flush();await refresh();if(active)await openNote(active);});$('#edit-mode').onclick=()=>showMode('edit');$('#preview-mode').onclick=()=>showMode('preview');$('#collapse').onclick=()=>toggleSidebar(true);$('#expand').onclick=()=>toggleSidebar(false);$('#note-menu').onclick=e=>{if(active)showMenu(e,{path:active,name:displayName(active),type:'note'});};
+$('#open-folder').onclick=showRepositories;$('#welcome-open').onclick=attempt(choose);$('#welcome-new').onclick=attempt(()=>create('note',''));$('#folder-label').onclick=()=>{selectedFolder='';renderTree();scheduleSessionSave();};$('#refresh').onclick=attempt(async()=>{await flush();await persistSession();await refresh();if(active)await openNote(active,{reveal:false,preserveView:true});});$('#edit-mode').onclick=()=>showMode('edit');$('#preview-mode').onclick=()=>showMode('preview');$('#collapse').onclick=()=>toggleSidebar(true);$('#expand').onclick=()=>toggleSidebar(false);$('#note-menu').onclick=e=>{if(active)showMenu(e,{path:active,name:displayName(active),type:'note'});};
 for(const action of ['minimize','maximize','close'])$('#'+action).onclick=attempt(()=>api('window',action));
-window.stillEvents.beforeClose(attempt(async()=>{await flush();await preferencesPending;await api('preferences',{mode,sidebarWidth});await api('ready-close');}));
+window.stillEvents.beforeClose(attempt(async()=>{await flush();await persistSession();await api('ready-close');}));
 document.addEventListener('keydown',attempt(async e=>{if($('#modal').open||$('#icon-dialog').open||$('#repositories-dialog').open)return;if(e.ctrlKey){const key=e.key.toLowerCase();if(['s','n','b','i','e','\\'].includes(key)){e.preventDefault();if(key==='s')await flush();if(key==='n')await create(e.shiftKey?'folder':'note');if(key==='b')format('bold');if(key==='i')format('italic');if(key==='e')showMode(mode==='edit'?'preview':'edit');if(key==='\\')toggleSidebar(!$('#app').classList.contains('sidebar-hidden'));}}if(e.key==='Tab'&&e.target===editor){e.preventDefault();editor.setRangeText('  ',editor.selectionStart,editor.selectionEnd,'end');editor.dispatchEvent(new Event('input'));}}));
 window.addEventListener('resize',resize);
 
 let preferencesPending=Promise.resolve(),sidebarWidth=280,draggedPath='',dropBusy=false;
 function savePreferences(values){preferencesPending=preferencesPending.catch(()=>{}).then(()=>api('preferences',values));preferencesPending.catch(e=>toast(e.message));}
+function captureNoteView(){return {path:active,scroll:$('#writing-area').scrollTop,selectionStart:editor.selectionStart,selectionEnd:editor.selectionEnd,selectionDirection:editor.selectionDirection};}
+function restoreNoteView(view){const length=editor.value.length;editor.setSelectionRange(Math.min(view.selectionStart||0,length),Math.min(view.selectionEnd||0,length),view.selectionDirection||'none');$('#writing-area').scrollTop=view.scroll||0;}
+function captureSession(){return {expanded:[...expanded],selectedFolder,treeScroll:$('#tree').scrollTop,note:captureNoteView()};}
+async function persistSession(){
+ clearTimeout(sessionTimer);
+ if(sessionReady&&!restoringSession)savePreferences({mode,sidebarWidth,sidebarHidden:$('#app').classList.contains('sidebar-hidden'),workspaceRoot:state.root,session:captureSession()});
+ await preferencesPending;
+}
+function scheduleSessionSave(){if(!sessionReady||restoringSession)return;clearTimeout(sessionTimer);sessionTimer=setTimeout(()=>{persistSession().catch(()=>{});},250);}
+function pruneTreeState(){const folders=new Set(flatten().filter(n=>n.type==='folder').map(n=>n.path));expanded=new Set([...expanded].filter(p=>folders.has(p)));if(!folders.has(selectedFolder))selectedFolder='';}
+function remapTreeState(old,next){const mapped=p=>p===old?next:p.startsWith(old+'\\')?next+p.slice(old.length):p;expanded=new Set([...expanded].map(mapped));selectedFolder=mapped(selectedFolder);}
+async function restoreWorkspace(next){
+ clearTimeout(sessionTimer);restoringSession=true;sessionReady=false;
+ try{
+  clearNote();state=next;mode=state.mode||mode;expanded=new Set(state.session?.expanded||[]);selectedFolder=state.session?.selectedFolder||'';pruneTreeState();renderTree();
+  const note=flatten().find(n=>n.type==='note'&&n.path===state.last)||flatten().find(n=>n.type==='note');
+  if(note)await openNote(note.path,{reveal:!state.session});
+  await new Promise(requestAnimationFrame);
+  if(note&&state.session?.note.path===note.path)restoreNoteView(state.session.note);
+  $('#tree').scrollTop=state.session?.treeScroll||0;
+ }finally{restoringSession=false;sessionReady=true;}
+ scheduleSessionSave();
+}
+for(const target of [$('#tree'),$('#writing-area')])target.addEventListener('scroll',scheduleSessionSave,{passive:true});
+for(const event of ['select','keyup','click','input'])editor.addEventListener(event,scheduleSessionSave);
 function applySidebarWidth(){const width=Math.max(220,Math.min(sidebarWidth,480,innerWidth-360));document.documentElement.style.setProperty('--sidebar-width',width+'px');$('#sidebar-resize').setAttribute('aria-valuenow',Math.round(width));}
 const grip=$('#sidebar-resize');
 grip.onpointerdown=e=>{if(e.button!==0)return;e.preventDefault();grip.setPointerCapture(e.pointerId);document.body.classList.add('resizing');};
@@ -138,16 +195,16 @@ function acceptsDrop(e){return [...e.dataTransfer.types].some(t=>t==='applicatio
 function dropPosition(e,row,item){const box=row.getBoundingClientRect(),ratio=(e.clientY-box.top)/box.height;if(!draggedPath&&e.dataTransfer.types.includes('Files'))return item.type==='folder'?'into':'after';if(item.type==='folder'&&ratio>.24&&ratio<.76)return 'into';return ratio<.5?'before':'after';}
 async function handleDrop(e,parent,anchor,position){
  const source=e.dataTransfer.getData('application/x-still-path');const imported=source?[]:window.fileDrop.paths([...e.dataTransfer.files]);
- if(dropBusy)return;dropBusy=true;try{await flush();
+ if(dropBusy)return;dropBusy=true;try{await flush();await persistSession();
  if(source){const result=await api('place',source,parent,anchor,position);const next=result.path;const nextActive=active===source?next:active.startsWith(source+'\\')?next+active.slice(source.length):active;
- expanded=new Set([...expanded].map(p=>p===source?next:p.startsWith(source+'\\')?next+p.slice(source.length):p));if(parent)expanded.add(parent);await refresh();if(nextActive)await openNote(nextActive);else renderTree();}
+ remapTreeState(source,next);if(parent)expanded.add(parent);await refresh();if(nextActive)await openNote(nextActive,{reveal:false,preserveView:true});else renderTree();}
  else if(imported.length){const result=await api('import',imported,parent);state.tree=result.tree;if(parent)expanded.add(parent);renderTree();toast(result.paths.length+' Markdown '+(result.paths.length===1?'note imported.':'notes imported.'));if(result.paths[0])await openNote(result.paths[0]);}
  }finally{dropBusy=false;draggedPath='';clearDropIndicators();}
 }
 for(const zone of [$('#tree'),$('#folder-label')]){zone.ondragover=e=>{if(!acceptsDrop(e)||e.target.closest('.tree-row'))return;e.preventDefault();clearDropIndicators();zone.classList.add('drop-into');e.dataTransfer.dropEffect=draggedPath?'move':'copy';};zone.ondragleave=e=>{if(!zone.contains(e.relatedTarget))zone.classList.remove('drop-into');};zone.ondrop=attempt(async e=>{if(e.target.closest('.tree-row'))return;e.preventDefault();e.stopPropagation();clearDropIndicators();await handleDrop(e,'','','after');});}
 document.addEventListener('dragover',e=>{if(e.dataTransfer.types.includes('Files'))e.preventDefault();});document.addEventListener('drop',e=>{e.preventDefault();});
 async function chooseIcon(item){if(item.type!=='note')return;const dialog=$('#icon-dialog');$('#icon-for').textContent=item.name;const grid=$('#icon-grid');grid.replaceChildren();for(const id of iconCatalog){const b=document.createElement('button');b.type='button';b.className='icon-choice';b.innerHTML=icon(id);b.title=id.charAt(0).toUpperCase()+id.slice(1);b.setAttribute('aria-label',b.title);b.setAttribute('aria-pressed',state.icons?.[item.path]===id);b.onclick=attempt(async()=>{state.icons=await api('set-icon',item.path,id);renderTree();dialog.close();});grid.append(b);}$('#icon-default').onclick=attempt(async()=>{state.icons=await api('set-icon',item.path,null);renderTree();dialog.close();});$('#icon-close').onclick=()=>dialog.close();dialog.showModal();}
-attempt(async()=>{state=await api('init');mode=state.mode||'edit';sidebarWidth=state.sidebarWidth||280;applySidebarWidth();renderTree();const note=flatten().find(n=>n.path===state.last)||flatten().find(n=>n.type==='note');if(note)await openNote(note.path);})();
+attempt(async()=>{const initial=await api('init');sidebarWidth=initial.sidebarWidth||280;applySidebarWidth();toggleSidebar(initial.sidebarHidden===true,false);await restoreWorkspace(initial);})();
 
 function updateWindowControls(state){const maximized=state.maximized;const button=$('#maximize');button.title=maximized?'Restore down':'Maximize';button.setAttribute('aria-label',button.title);button.innerHTML=maximized?'<svg class="caption-icon" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 3.5v-2h6.5V8h-2"/><rect x="1.5" y="4" width="6.5" height="6.5"/></svg>':'<svg class="caption-icon" viewBox="0 0 12 12" aria-hidden="true"><rect x="1.5" y="1.5" width="9" height="9"/></svg>';document.body.classList.toggle('window-maximized',maximized);}
 window.stillEvents.windowState(updateWindowControls);
@@ -162,14 +219,14 @@ function renderUpdate(next){
  const labels={idle:'Check for updates',checking:'Checking for updates…',current:'Up to date · Check again',downloading:`Downloading update · ${next.percent}%`,ready:'Restart to update',installing:'Installing update…',error:'Retry update check',disabled:'Install for auto-updates'};
  $('#update-label').textContent=labels[next.status]||labels.idle;
  button.setAttribute('aria-label',labels[next.status]||labels.idle);
- button.title=next.message||(next.status==='ready'?`Install Still ${next.version} and restart`:next.status==='disabled'?'Open the latest Still installer on GitHub':'Updates from tsunsora/still on GitHub');
+ button.title=next.message||(next.status==='ready'?`Install Still Notes ${next.version} and restart`:next.status==='disabled'?'Open the latest Still Notes installer on GitHub':'Updates from tsunsora/still on GitHub');
 }
 window.stillEvents.updateState(renderUpdate);
 $('#app-update').onclick=attempt(async()=>{
  if(updateState.status==='disabled'){await api('external','https://github.com/tsunsora/still/releases/latest');return;}
  if(updateState.status==='ready'){
   installingUpdate=true;document.body.inert=true;renderUpdate(updateState);
-  try{await flush();await preferencesPending;await api('preferences',{mode,sidebarWidth});await api('install-update');}
+  try{await flush();await persistSession();await api('install-update');}
   finally{installingUpdate=false;document.body.inert=false;renderUpdate(updateState);}
  }else{const next=await api('check-updates');renderUpdate(next);if(next.status==='error')toast(next.message);}
 });

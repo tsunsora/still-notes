@@ -25,7 +25,7 @@ function createUpdates({updater,disabledReason='',notify=()=>{},getToken=githubT
    ?'Sign in with gh auth login to get updates from the private tsunsora/still repository.'
    :error?.code==='ERR_UPDATER_CHANNEL_FILE_NOT_FOUND'
     ?'The latest GitHub release needs its latest.yml update file. Try again after an update-enabled release is published.'
-    :'Could not update Still. Check your connection and GitHub repository access, then try again.';
+    :'Could not update Still Notes. Check your connection and GitHub repository access, then try again.';
   return publish({status:'error',message});
  }
  if(!disabledReason){

@@ -1,16 +1,16 @@
 {
   "name": "still-notes",
-  "productName": "Still",
-  "version": "1.6.0",
+  "productName": "Still Notes",
+  "version": "1.6.1",
   "description": "A quiet space for Markdown notes",
   "main": "src/main.cjs",
-  "author": "Still",
+  "author": "Still Notes",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "package": "electron-packager . Still --platform=win32 --arch=x64 --out=../Still-Windows --overwrite --asar --icon=src/icon.ico --ignore=tests --ignore=README.md",
+    "package": "electron-packager . \"Still Notes\" --platform=win32 --arch=x64 --out=../Still-Windows --overwrite --asar --icon=src/icon.ico --ignore=tests --ignore=README.md",
     "installer": "electron-builder --win nsis --x64 --publish never",
-    "test": "node --test tests/updater.test.cjs"
+    "test": "node --test tests/updater.test.cjs tests/session-state.test.cjs"
   },
   "dependencies": {
     "dompurify": "3.4.15",
@@ -27,7 +27,7 @@
   },
   "build": {
     "appId": "com.still.notes",
-    "productName": "Still",
+    "productName": "Still Notes",
     "publish": {
       "provider": "github",
       "owner": "tsunsora",
@@ -55,7 +55,7 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "deleteAppDataOnUninstall": false,
-      "artifactName": "Still-Setup-${version}.${ext}"
+      "artifactName": "Still-Notes-Setup-${version}.${ext}"
     }
   }
 }

@@ -8,7 +8,7 @@ const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:
  const key=crypto.createHash('sha256').update((await fs.realpath(root)).toLowerCase()).digest('hex');
  await fs.writeFile(path.join(data,'settings.json'),JSON.stringify({root,last:'Test.md',workspaces:{[key]:{icons:[['Folder','heart'],['Test.md','star']],orders:[]}}}));
  const env={...process.env,STILL_TEST_DATA:data};delete env.ELECTRON_RUN_AS_NODE;
- const executablePath=process.env.STILL_EXE||(process.argv.includes('--packaged')?path.resolve(__dirname,'../../Still-Windows/Still-win32-x64/Still.exe'):null);
+ const executablePath=process.env.STILL_EXE||(process.argv.includes('--packaged')?path.resolve(__dirname,'../../Still-Windows/Still Notes-win32-x64/Still Notes.exe'):null);
  const app=await electron.launch(executablePath?{executablePath,env}:{args:[path.resolve(__dirname,'..')],env});
  try{
   const page=await app.firstWindow(),errors=[];page.on('pageerror',error=>errors.push(error.message));

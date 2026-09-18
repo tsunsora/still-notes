@@ -10,6 +10,8 @@ const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:
  try{
   const page=await app.firstWindow(),errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.waitForFunction(()=>document.querySelector('#note-title').value==='Test');
+  assert.equal(await page.title(),'Still Notes');assert.equal(await page.locator('.brand strong').textContent(),'Still Notes');
+  assert.equal(await app.evaluate(({app})=>app.getName()),'Still Notes');
   assert.equal(await page.locator('#new-note, #new-folder, .side-actions').count(),0);
   await page.keyboard.press('Control+Shift+N');await page.locator('#modal-input').fill('Shortcut folder');await page.locator('#modal-submit').click();await page.locator('#modal').waitFor({state:'hidden'});
   await page.keyboard.press('Control+n');await page.locator('#modal-input').fill('Shortcut note');await page.locator('#modal-submit').click();
