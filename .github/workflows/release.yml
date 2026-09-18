@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: windows-release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: windows-latest
@@ -21,7 +25,15 @@ jobs:
       - name: Check version matches release tag
         run: node -e "if(process.env.GITHUB_REF_NAME !== 'v'+require('./package.json').version) process.exit(1)"
       - run: npm test
-      - name: Publish installer and update metadata
-        run: npx electron-builder --win nsis --x64 --publish always
+      - name: Build installer and update metadata
+        run: npm run installer
+      - name: Publish complete release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = node -p "require('./package.json').version"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $installer = "../Still-Installer/Still-Notes-Setup-$version.exe"
+          gh release create "$env:GITHUB_REF_NAME" "$installer" "${installer}.blockmap" "../Still-Installer/latest.yml" --verify-tag --draft --title "Still Notes $version" --notes-file RELEASE-NOTES.md
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          gh release edit "$env:GITHUB_REF_NAME" --draft=false --latest

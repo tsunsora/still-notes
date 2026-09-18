@@ -81,11 +81,11 @@ The GitHub repository is private. Install GitHub CLI and run `gh auth login --ho
 
 ### Publishing an update
 
-1. Increase the version in `package.json` and `package-lock.json`.
+1. Increase the version in `package.json` and `package-lock.json`, and update `RELEASE-NOTES.md`.
 2. Build with `npm run installer`. Keep all three release files: `Still-Notes-Setup-VERSION.exe`, its `.exe.blockmap`, and `latest.yml`. The updater needs `latest.yml`, including the installer checksum.
 3. Publish those three files together in a stable GitHub release whose tag is `vVERSION`.
 
-The included `.github/workflows/release.yml` builds, tests, and publishes these files when a matching version tag is pushed. Its GitHub Actions token is used only for publishing. Local builds never publish automatically.
+The included `.github/workflows/release.yml` builds and tests when a matching version tag is pushed, uploads all three files to one draft release, then publishes it. This keeps incomplete update metadata out of the live feed. Its GitHub Actions token is used only for publishing. Local builds never publish automatically.
 
 Run updater state-machine tests with `npm test`, and UI / save-before-update checks with `node tests/ui.cjs`. Set `STILL_EXE` to a packaged executable to run the UI tests against a build.
 
