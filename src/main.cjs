@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeTheme, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeTheme, screen, powerMonitor } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -152,9 +152,15 @@ handle('reveal', async () => {if(root) await shell.openPath(root);});
 handle('external', async url => {if(typeof url==='string' && /^https?:\/\//i.test(url)) await shell.openExternal(url);});
 handle('window', async action => {if(action==='minimize')win.minimize();if(action==='maximize')win.isMaximized()?win.unmaximize():win.maximize();if(action==='close')win.close();});
 handle('window-state',async()=>({maximized:win.isMaximized()}));
-handle('ready-close', async () => {await writes;await persistWindowState();await settingsWrites;closing=true;win.close();});
+handle('ready-close', async () => {
+ if(updates.snapshot().status==='installing')return;
+ await writes;await persistWindowState();await settingsWrites;
+ if(updates.snapshot().status==='ready'){await updates.install({relaunch:false});return;}
+ closing=true;win.close();
+});
 handle('update-state',()=>updates.snapshot());
 handle('check-updates',()=>updates.check());
+handle('resume-updates',()=>updates.resume());
 handle('install-update',()=>updates.install());
 app.whenReady().then(async()=>{
   try {settings=JSON.parse(await fs.readFile(cfg(),'utf8'));}catch{settings={};}
@@ -182,9 +188,10 @@ app.whenReady().then(async()=>{
    disabledReason,
    updater:disabledReason?null:require('electron-updater').autoUpdater,
    notify:state=>{if(!win.isDestroyed())win.webContents.send('update-state',state);},
-    beforeInstall:async()=>{await writes;await persistWindowState();await settingsWrites;closing=true;},
+   beforeInstall:async()=>{await writes;await persistWindowState();await settingsWrites;closing=true;},
    installFailed:()=>{closing=false;}
   });
+  powerMonitor.on('resume',()=>updates.resume());
   await win.loadURL(pathToFileURL(path.join(__dirname,'index.html')).href);if(restoredWindow.maximized)win.maximize();win.show();updates.start();
 });
 app.on('window-all-closed',()=>{clearTimeout(windowSaveTimer);updates?.stop();app.quit();});

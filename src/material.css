@@ -58,7 +58,7 @@ main{background:var(--bg);border:1px solid #ffffff12;border-bottom:0;border-righ
 header{height:47px;min-height:47px;border-bottom:1px solid #ffffff10;padding-left:23px}#breadcrumb{color:#e3e5e5;font-weight:550;font-size:13px}.document-toolbar{height:57px}.view-toggle{background:#202020;border-color:#ffffff0c}.view-toggle:before{background:#343434}.page{padding-top:31px}.side-bottom{padding:10px 0 12px}#open-folder{min-height:38px;padding:9px 10px;font-size:13px}
 #context,dialog,#toast{background:#292929;background-image:none!important;box-shadow:none!important;filter:none!important;border:1px solid #ffffff13;backdrop-filter:none!important}
 dialog::backdrop{background:#00000055;background-image:none!important;backdrop-filter:none;filter:none}
-#context{border-radius:12px;padding:5px;min-width:206px}#context button{min-height:35px;padding:8px 10px;font-size:13px;gap:10px}#context button svg.material-icon{width:18px;height:18px;color:#aeb6b8}#context button:hover{background:#373737}#context .danger,#context .danger svg.material-icon{color:#e0a0a0}
+#context{border-radius:12px;padding:5px;min-width:206px}#context button{min-height:35px;padding:8px 10px;font-size:13px;gap:10px}#context button svg.material-icon{width:18px;height:18px;color:#aeb6b8}#context button:hover,#context button:focus-visible{background:#373737}#context button:focus{outline:none}#context .danger,#context .danger svg.material-icon{color:#e0a0a0}
 dialog{background:#292929;border-radius:14px}dialog input,dialog select{background:#202020}#toast{border-radius:11px}.icon-choice:hover{background:#363636}
 @media(max-width:850px){#sidebar{padding-left:8px;padding-right:8px}.sidebar-hidden #sidebar{padding:0}}
 
@@ -116,4 +116,5 @@ header{padding-right:23px;-webkit-app-region:no-drag}
 #repositories-error{color:#eda9a9}
 #app-update{width:100%;justify-content:flex-start;gap:10px;padding:8px 10px;margin-top:2px;font-size:12px;color:var(--muted);text-align:left}
 #app-update svg.material-icon{width:16px;height:16px}
-#app-update.update-ready{color:var(--text);background:#ffffff08}
+#app-update.update-ready{color:var(--text);background:#ffffff08;flex-wrap:wrap;row-gap:3px}
+#update-detail{flex-basis:100%;padding-left:26px;font-size:11px;color:var(--muted)}

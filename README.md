@@ -4,7 +4,7 @@ A minimal Windows Markdown notebook. Your notes are ordinary `.md` files in a fo
 
 ## Open the app
 
-Install **Still-Notes-Setup-1.6.1.exe** from the [latest GitHub release](https://github.com/tsunsora/still/releases/latest), or open **Still Notes.exe** inside the **Still Notes-win32-x64** portable folder. Keep the portable files beside the executable. Start writing immediately: your first notebook is created in **Documents/Still Notes**. To use another location, choose **Open an existing folder** or the folder button at the bottom of the sidebar.
+Install **Still-Notes-Setup-1.6.2.exe** from the [latest GitHub release](https://github.com/tsunsora/still/releases/latest), or open **Still Notes.exe** inside the **Still Notes-win32-x64** portable folder. Keep the portable files beside the executable. Start writing immediately: your first notebook is created in **Documents/Still Notes**. To use another location, choose **Open an existing folder** or the folder button at the bottom of the sidebar.
 
 An Obsidian vault can be opened as a folder. Still Notes edits standard Markdown; it does not run Obsidian plugins, databases, canvases, or wiki-link extensions. Hidden configuration folders are omitted from the sidebar.
 
@@ -75,7 +75,9 @@ Build an installer with `npm ci` followed by `npm run installer`. Run the folder
 
 ## Automatic updates (1.5)
 
-Install **Still-Notes-Setup-1.6.1.exe** once to enable automatic updates. The installed app checks the latest stable release in **tsunsora/still** ten seconds after launch and every four hours, downloads newer versions in the background, and shows **Restart to update** at the bottom of the sidebar. Clicking it saves pending edits and preferences before running the installer and reopening Still Notes. You can also click **Check for updates**. A failed check can be retried; a failed note save prevents installation.
+Install **Still-Notes-Setup-1.6.2.exe** once to enable automatic updates. The installed app checks the latest stable release in **tsunsora/still** ten seconds after launch and every four hours, and downloads newer versions in the background. Once ready, the update installs silently when you close Still Notes, without reopening the app. To use the new version immediately, click **Restart to update** at the bottom of the sidebar. Both paths save pending notes, session state, and preferences first; a failed save keeps the app open with your edits intact.
+
+Failed checks and downloads retry automatically after one minute, backing off to at most once an hour. Waking the computer or reconnecting also retries a stale failed check. Background failures do not show a popup; **Check for updates** remains available for an immediate retry and error details. Manual restarts apply the update silently and reopen your saved session.
 
 The GitHub repository is private. Install GitHub CLI and run `gh auth login --hostname github.com` with an account that can read `tsunsora/still`. Alternatively, launch Still Notes with a `GH_TOKEN` or `GITHUB_TOKEN` environment variable that has read access to that repository's contents. Credentials are obtained locally at runtime, stay in the main process, and are not included in the app or its update files. The portable build links to the latest installer; development and automated test runs do not contact GitHub.
 
@@ -88,6 +90,8 @@ The GitHub repository is private. Install GitHub CLI and run `gh auth login --ho
 The included `.github/workflows/release.yml` builds and tests when a matching version tag is pushed, uploads all three files to one draft release, then publishes it. This keeps incomplete update metadata out of the live feed. Its GitHub Actions token is used only for publishing. Local builds never publish automatically.
 
 Run updater state-machine tests with `npm test`, and UI / save-before-update checks with `node tests/ui.cjs`. Set `STILL_EXE` to a packaged executable to run the UI tests against a build.
+
+Run `node tests/update-close.cjs` to exercise the real close and restart save handshakes with a simulated installer. It checks that notes and session state are on disk before installation, and that closing does not request a relaunch.
 
 Run folder animation, open/closed icon, and note-only icon customization checks with `node tests/folders.cjs`. These checks also cover older saved folder icons and reduced-motion preferences.
 

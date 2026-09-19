@@ -150,7 +150,13 @@ $('#note-title').addEventListener('blur',attempt(async()=>{if(active&&$('#note-t
 $('#preview').addEventListener('click',attempt(async e=>{const link=e.target.closest('a');if(link){e.preventDefault();const href=link.getAttribute('href');if(/^https?:\/\//i.test(href))await api('external',href);else{const rel=decodeURIComponent(href.split('#')[0]);const target=flatten().find(n=>n.type==='note'&&(n.path.replaceAll('\\','/')===(parentOf(active)?parentOf(active).replaceAll('\\','/')+'/':'')+rel));if(target)await openNote(target.path);}}}));
 $('#open-folder').onclick=showRepositories;$('#welcome-open').onclick=attempt(choose);$('#welcome-new').onclick=attempt(()=>create('note',''));$('#folder-label').onclick=()=>{selectedFolder='';renderTree();scheduleSessionSave();};$('#refresh').onclick=attempt(async()=>{await flush();await persistSession();await refresh();if(active)await openNote(active,{reveal:false,preserveView:true});});$('#edit-mode').onclick=()=>showMode('edit');$('#preview-mode').onclick=()=>showMode('preview');$('#collapse').onclick=()=>toggleSidebar(true);$('#expand').onclick=()=>toggleSidebar(false);$('#note-menu').onclick=e=>{if(active)showMenu(e,{path:active,name:displayName(active),type:'note'});};
 for(const action of ['minimize','maximize','close'])$('#'+action).onclick=attempt(()=>api('window',action));
-window.stillEvents.beforeClose(attempt(async()=>{await flush();await persistSession();await api('ready-close');}));
+let preparingToClose=false;
+window.stillEvents.beforeClose(attempt(async()=>{
+ if(preparingToClose||installingUpdate)return;
+ preparingToClose=true;document.body.inert=true;
+ try{await flush();await persistSession();await api('ready-close');}
+ finally{preparingToClose=false;document.body.inert=false;}
+}));
 document.addEventListener('keydown',attempt(async e=>{if($('#modal').open||$('#icon-dialog').open||$('#repositories-dialog').open)return;if(e.ctrlKey){const key=e.key.toLowerCase();if(['s','n','b','i','e','\\'].includes(key)){e.preventDefault();if(key==='s')await flush();if(key==='n')await create(e.shiftKey?'folder':'note');if(key==='b')format('bold');if(key==='i')format('italic');if(key==='e')showMode(mode==='edit'?'preview':'edit');if(key==='\\')toggleSidebar(!$('#app').classList.contains('sidebar-hidden'));}}if(e.key==='Tab'&&e.target===editor){e.preventDefault();editor.setRangeText('  ',editor.selectionStart,editor.selectionEnd,'end');editor.dispatchEvent(new Event('input'));}}));
 window.addEventListener('resize',resize);
 
@@ -217,9 +223,13 @@ function renderUpdate(next){
  button.disabled=['checking','downloading','installing'].includes(next.status)||installingUpdate;
  button.classList.toggle('update-ready',next.status==='ready');
  const labels={idle:'Check for updates',checking:'Checking for updates…',current:'Up to date · Check again',downloading:`Downloading update · ${next.percent}%`,ready:'Restart to update',installing:'Installing update…',error:'Retry update check',disabled:'Install for auto-updates'};
+ if(next.background&&next.status==='error')labels.error='Check for updates';
  $('#update-label').textContent=labels[next.status]||labels.idle;
+ let detail=$('#update-detail');
+ if(!detail){detail=document.createElement('span');detail.id='update-detail';button.append(detail);}
+ detail.hidden=next.status!=='ready';detail.textContent='Or it will install when you close';
  button.setAttribute('aria-label',labels[next.status]||labels.idle);
- button.title=next.message||(next.status==='ready'?`Install Still Notes ${next.version} and restart`:next.status==='disabled'?'Open the latest Still Notes installer on GitHub':'Updates from tsunsora/still on GitHub');
+ button.title=next.message||(next.status==='ready'?`Still Notes ${next.version} is ready. Restart now, or keep writing and it will install silently when you close.`:next.status==='disabled'?'Open the latest Still Notes installer on GitHub':'Updates download automatically in the background');
 }
 window.stillEvents.updateState(renderUpdate);
 $('#app-update').onclick=attempt(async()=>{
@@ -231,3 +241,4 @@ $('#app-update').onclick=attempt(async()=>{
  }else{const next=await api('check-updates');renderUpdate(next);if(next.status==='error')toast(next.message);}
 });
 attempt(async()=>renderUpdate(await api('update-state')))();
+window.addEventListener('online',()=>{api('resume-updates').catch(()=>{});});

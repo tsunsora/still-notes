@@ -58,7 +58,14 @@ test('waits for pending saves and prevents a second installation',async()=>{
  const {updater,service}=setup({beforeInstall:()=>saved});
  await service.check();const installation=service.install();assert.equal(updater.installs,0);
  await assert.rejects(service.install(),/No downloaded update/);
- save();await installation;assert.equal(updater.installs,1);assert.deepEqual(updater.installArgs,[false,true]);
+ save();await installation;assert.equal(updater.installs,1);assert.deepEqual(updater.installArgs,[true,true]);
+});
+test('closing installs silently without reopening, only after pending saves finish',async()=>{
+ let save;const saved=new Promise(resolve=>save=resolve);
+ const {updater,service}=setup({beforeInstall:()=>saved});
+ await service.check();const installation=service.install({relaunch:false});
+ assert.equal(service.snapshot().status,'installing');assert.equal(updater.installs,0);
+ save();await installation;assert.deepEqual(updater.installArgs,[true,false]);
 });
 test('a failed save preserves the downloaded update for a retry',async()=>{
  let fails=true,resets=0;
@@ -78,4 +85,59 @@ test('development and portable builds never check or download',async()=>{
   service.start();assert.equal((await service.check()).status,'disabled');
   await assert.rejects(service.install(),/No downloaded update/);service.stop();
  }
+});
+const settle=()=>new Promise(resolve=>setImmediate(resolve));
+test('automatic failures retry with capped backoff and return to normal polling after recovery',async t=>{
+ t.mock.timers.enable({apis:['setTimeout','Date']});
+ const {updater,service}=setup();t.after(()=>service.stop());
+ updater.checkForUpdates=async()=>{updater.checks++;throw Error('offline');};
+ service.start();service.start();t.mock.timers.tick(9999);assert.equal(updater.checks,0);
+ t.mock.timers.tick(1);await settle();assert.equal(updater.checks,1);assert.equal(service.snapshot().background,true);
+ let count=1;
+ for(const minutes of [1,2,4,8,16,32,60,60]){
+  t.mock.timers.tick(minutes*60000-1);await settle();assert.equal(updater.checks,count);
+  t.mock.timers.tick(1);await settle();assert.equal(updater.checks,++count);
+ }
+ updater.checkForUpdates=Updater.prototype.checkForUpdates;updater.available=false;
+ t.mock.timers.tick(60*60000);await settle();assert.equal(service.snapshot().status,'current');count++;
+ t.mock.timers.tick(4*60*60000-1);await settle();assert.equal(updater.checks,count);
+ t.mock.timers.tick(1);await settle();assert.equal(updater.checks,count+1);
+});
+test('manual retry bypasses backoff and a ready update stops polling',async t=>{
+ t.mock.timers.enable({apis:['setTimeout','Date']});
+ const {updater,service}=setup();t.after(()=>service.stop());
+ updater.checkForUpdates=async()=>{throw Error('offline');};
+ service.start();t.mock.timers.tick(10000);await settle();
+ updater.checkForUpdates=Updater.prototype.checkForUpdates;
+ assert.equal((await service.check()).status,'ready');assert.equal(service.snapshot().background,false);
+ t.mock.timers.tick(24*60*60000);await settle();assert.equal(updater.checks,1);assert.equal(updater.downloads,1);assert.equal(updater.installs,0);
+});
+test('stop cancels retries, including a check that finishes after shutdown',async t=>{
+ t.mock.timers.enable({apis:['setTimeout','Date']});
+ let release;const token=new Promise(resolve=>release=resolve);
+ const {updater,service}=setup({getToken:()=>token});
+ service.start();t.mock.timers.tick(10000);service.stop();release('test-credential');await settle();
+ assert.equal(updater.checks,1);
+ service.resume();t.mock.timers.tick(24*60*60000);await settle();assert.equal(updater.checks,1);
+ const retry=setup();retry.updater.checkForUpdates=async()=>{retry.updater.checks++;throw Error('offline');};
+ retry.service.start();t.mock.timers.tick(10000);await settle();retry.service.stop();
+ t.mock.timers.tick(24*60*60000);await settle();assert.equal(retry.updater.checks,1);
+});
+test('waking or reconnecting retries a stale failure without flooding checks',async t=>{
+ t.mock.timers.enable({apis:['setTimeout','Date'],now:100000});
+ const {updater,service}=setup();t.after(()=>service.stop());
+ updater.checkForUpdates=async()=>{updater.checks++;throw Error('offline');};
+ service.start();await service.check({background:true});
+ service.resume();await settle();assert.equal(updater.checks,1);
+ t.mock.timers.setTime(Date.now()+61000);updater.checkForUpdates=Updater.prototype.checkForUpdates;updater.available=false;
+ service.resume();service.resume();await settle();assert.equal(updater.checks,2);assert.equal(service.snapshot().status,'current');
+ t.mock.timers.setTime(Date.now()+61000);service.resume();await settle();assert.equal(updater.checks,2);
+ t.mock.timers.setTime(Date.now()+4*60*60000);service.resume();await settle();assert.equal(updater.checks,3);
+});
+test('a manual check joining an automatic check keeps explicit error feedback',async()=>{
+ let reject;const token=new Promise((_resolve,fail)=>reject=fail);
+ const {service}=setup({getToken:()=>token});
+ const automatic=service.check({background:true}),manual=service.check();
+ reject(Error('offline'));await Promise.all([automatic,manual]);
+ assert.equal(service.snapshot().background,false);assert.equal(service.snapshot().status,'error');
 });

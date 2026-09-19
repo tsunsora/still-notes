@@ -21,16 +21,30 @@ const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:
   await page.getByRole('menuitem',{name:'New note',exact:true}).click();await page.locator('#modal-input').fill('Context note');await page.locator('#modal-submit').click();
   await page.waitForFunction(()=>document.querySelector('#note-title').value==='Context note');
   assert.equal(await fs.readFile(path.join(root,'Shortcut folder','Context note.md'),'utf8'),'');
-  // Exercise update status messages and save-before-install through the real IPC boundary.
+   // Exercise update status messages and save-before-install through the real IPC boundary.
+   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].webContents.send('update-state',{status:'error',background:true,message:'Will retry automatically'}));
+   await page.getByRole('button',{name:'Check for updates',exact:true}).waitFor();
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].webContents.send('update-state',{status:'downloading',percent:37,version:'1.6.0'}));
   await page.getByRole('button',{name:'Downloading update · 37%'}).waitFor();assert.equal(await page.locator('#app-update').isDisabled(),true);
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].webContents.send('update-state',{status:'ready',percent:100,version:'1.6.0'}));
-  await page.getByRole('button',{name:'Restart to update'}).waitFor();
+   await page.getByRole('button',{name:'Restart to update'}).waitFor();
+   assert.equal(await page.locator('#update-detail').textContent(),'Or it will install when you close');
+   assert.equal(await page.locator('#update-detail').isVisible(),true);
   await page.locator('#editor').fill('Saved before update');await page.locator('#app-update').click();
   // Test builds reject installation, so this also verifies UI recovery after failure.
   await page.getByRole('alert').filter({hasText:'No downloaded update'}).waitFor();
   assert.equal(await fs.readFile(path.join(root,'Shortcut folder','Context note.md'),'utf8'),'Saved before update');
-  assert.equal(await page.locator('body').evaluate(body=>body.inert),false);
+   assert.equal(await page.locator('body').evaluate(body=>body.inert),false);
+   // A conflicting disk edit must block both restart and normal close.
+   await fs.writeFile(path.join(root,'Shortcut folder','Context note.md'),'External edit');
+   await page.locator('#editor').fill('Keep my unsaved edit');await page.locator('#app-update').click();
+   await page.getByRole('alert').filter({hasText:'This note changed in another app'}).waitFor();
+   assert.equal(await page.locator('body').evaluate(body=>body.inert),false);
+   await page.locator('#close').click();
+   await page.waitForFunction(()=>!document.body.inert);
+   assert.equal(await page.locator('#editor').inputValue(),'Keep my unsaved edit');
+   assert.equal(await fs.readFile(path.join(root,'Shortcut folder','Context note.md'),'utf8'),'External edit');
+   await fs.writeFile(path.join(root,'Shortcut folder','Context note.md'),'Saved before update');
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(680,500));
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
   await page.locator('#editor').fill('Saved before close');await page.locator('#close').click();await app.waitForEvent('close');

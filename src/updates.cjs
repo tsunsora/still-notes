@@ -1,6 +1,7 @@
 const {execFile}=require('node:child_process');
 const {promisify}=require('node:util');
 const run=promisify(execFile);
+const POLL_INTERVAL=4*60*60*1000,RETRY_INTERVAL=60*1000,MAX_RETRY_INTERVAL=60*60*1000;
 
 // Credentials stay in the main process and are never written to update metadata.
 async function githubToken(){
@@ -15,8 +16,8 @@ async function githubToken(){
 }
 
 function createUpdates({updater,disabledReason='',notify=()=>{},getToken=githubToken,beforeInstall=async()=>{},installFailed=()=>{}}){
- let state={status:disabledReason?'disabled':'idle',reason:disabledReason,version:'',percent:0,message:''};
- let pending=null,startTimer,pollTimer;
+ let state={status:disabledReason?'disabled':'idle',reason:disabledReason,version:'',percent:0,message:'',background:false};
+ let pending=null,timer,running=false,failures=0,lastCheck=0;
  const snapshot=()=>({...state});
  function publish(values){state={...state,...values};notify(snapshot());return snapshot();}
  function failed(error){
@@ -30,6 +31,7 @@ function createUpdates({updater,disabledReason='',notify=()=>{},getToken=githubT
  }
  if(!disabledReason){
   updater.autoDownload=false;
+  // Installation is routed through the app's save-before-close handshake.
   updater.autoInstallOnAppQuit=false;
   updater.allowPrerelease=false;
   updater.allowDowngrade=false;
@@ -40,10 +42,16 @@ function createUpdates({updater,disabledReason='',notify=()=>{},getToken=githubT
   });
   updater.on('update-downloaded',info=>publish({status:'ready',version:info.version,percent:100,message:''}));
  }
- async function check(){
+ function schedule(delay){
+  clearTimeout(timer);timer=null;
+  if(!running||['ready','installing'].includes(state.status))return;
+  timer=setTimeout(()=>{timer=null;void check({background:true});},delay);timer.unref?.();
+ }
+ async function check({background=false}={}){
   if(disabledReason||['ready','installing'].includes(state.status))return snapshot();
-  if(pending)return pending;
-  publish({status:'checking',message:'',percent:0});
+  if(pending){if(!background&&state.background)publish({background:false});return pending;}
+  clearTimeout(timer);timer=null;lastCheck=Date.now();
+  publish({status:'checking',message:'',version:'',percent:0,background});
   pending=(async()=>{
    try{
     const token=await getToken();
@@ -57,9 +65,13 @@ function createUpdates({updater,disabledReason='',notify=()=>{},getToken=githubT
     return snapshot();
    }catch(error){return failed(error);}
   })();
-  try{return await pending;}finally{pending=null;}
+  try{return await pending;}finally{
+   pending=null;
+   failures=state.status==='error'?failures+1:0;
+   schedule(failures?Math.min(RETRY_INTERVAL*2**Math.min(failures-1,6),MAX_RETRY_INTERVAL):POLL_INTERVAL);
+  }
  }
- async function install(){
+ async function install({relaunch=true}={}){
   if(state.status!=='ready')throw Error('No downloaded update is ready to install.');
   publish({status:'installing',message:''});
   try{
@@ -67,16 +79,19 @@ function createUpdates({updater,disabledReason='',notify=()=>{},getToken=githubT
   }catch(error){
    installFailed();publish({status:'ready',message:'Could not save pending changes. Please try again.'});throw error;
   }
-  try{updater.quitAndInstall(false,true);}catch(error){failed(error);}
+  try{updater.quitAndInstall(true,relaunch);}catch(error){failed(error);}
   if(state.status==='error')throw Error(state.message);
   return snapshot();
  }
  function start(){
-  if(disabledReason||startTimer||pollTimer)return;
-  startTimer=setTimeout(()=>{void check();},10000);startTimer.unref?.();
-  pollTimer=setInterval(()=>{void check();},4*60*60*1000);pollTimer.unref?.();
+  if(disabledReason||running)return;
+  running=true;schedule(10000);
  }
- function stop(){clearTimeout(startTimer);clearInterval(pollTimer);startTimer=null;pollTimer=null;}
- return {snapshot,check,install,start,stop};
+ function resume(){
+  if(!running||pending||Date.now()-lastCheck<RETRY_INTERVAL)return;
+  if(state.status==='error'||Date.now()-lastCheck>=POLL_INTERVAL)void check({background:true});
+ }
+ function stop(){running=false;clearTimeout(timer);timer=null;}
+ return {snapshot,check,install,start,stop,resume};
 }
 module.exports={createUpdates};
