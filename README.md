@@ -1,100 +1,137 @@
+<p align="center">
+  <img src="src/icon.png" width="88" alt="Still Notes app icon">
+</p>
+
 # Still Notes
 
-A minimal Windows Markdown notebook. Your notes are ordinary `.md` files in a folder you choose. No account, server, or cloud storage is required.
+A quiet space for Markdown notes on **Windows**. Your notebook is a folder of ordinary `.md` files that you own, choose, and back up. No account, server, or cloud storage is required to write.
 
-## Open the app
+[**Download for Windows**](https://github.com/tsunsora/still-notes/releases/latest) · [Release notes](RELEASE-NOTES.md) · [Report an issue](https://github.com/tsunsora/still-notes/issues)
 
-Install **Still-Notes-Setup-1.6.2.exe** from the [latest GitHub release](https://github.com/tsunsora/still/releases/latest), or open **Still Notes.exe** inside the **Still Notes-win32-x64** portable folder. Keep the portable files beside the executable. Start writing immediately: your first notebook is created in **Documents/Still Notes**. To use another location, choose **Open an existing folder** or the folder button at the bottom of the sidebar.
+## At a glance
 
-An Obsidian vault can be opened as a folder. Still Notes edits standard Markdown; it does not run Obsidian plugins, databases, canvases, or wiki-link extensions. Hidden configuration folders are omitted from the sidebar.
+- **Plain Markdown:** write and preview headings, lists, tasks, links, quotes, code blocks, and tables.
+- **Automatic saving:** saves after a short pause, before navigation, and before closing.
+- **A familiar sidebar:** folders, drag-and-drop organization, note icons, and quick keyboard shortcuts.
+- **Multiple notebooks:** switch between local folders, each with its own remembered session.
+- **Pick up where you left off:** restores your window, sidebar, open note, reading position, and text selection.
+- **A focused dark theme:** rounded Material icons and support for Windows reduced-motion preferences.
 
-### Upgrading from Still
+## Install and start writing
 
-Still Notes is the new name for the same app. The installer upgrades existing installations and updates their shortcuts. The app keeps its existing `%APPDATA%\Still` profile and `com.still.notes` Windows identity, preserving saved repositories, note metadata, and session preferences. Your Markdown folders stay in their current locations.
+1. Open the [latest release](https://github.com/tsunsora/still-notes/releases/latest) and download the `Still-Notes-Setup-VERSION.exe` installer.
+2. Run it, choose an installation location, and launch **Still Notes**.
+3. Start in the automatically created **Documents/Still Notes** notebook, or use the folder button at the bottom of the sidebar to open an existing folder.
+
+Windows builds are unsigned. The installer adds Start menu and desktop shortcuts. Notes remain separate from the application, and uninstalling retains your notes and app settings.
+
+You can also build a portable copy using the [development instructions](#development). Run `Still Notes.exe` from the resulting `Still Notes-win32-x64` folder and keep its companion files beside it.
+
+### Already using Still?
+
+Still Notes is the new name for the same app. The installer upgrades existing installations and shortcuts while preserving the `%APPDATA%\Still` profile and `com.still.notes` Windows identity. Your notes stay in their existing folders.
 
 ## Everyday use
 
-- Right-click the sidebar to create a note or folder, or use Ctrl+N / Ctrl+Shift+N in the most recently selected folder. Click Notes above the note tree to return the creation location to the root. The highlighted folder shows where new notes will be created. Folder menus also let you create items inside a specific folder.
-- Edit the title to rename the file. Use the three-dot menu to move, rename, reload, or send a note or folder to the Windows Recycle Bin.
-- Write accepts Markdown. Read renders headings, lists, task checkboxes, links, quotes, code blocks, and tables.
-- Changes save automatically after a short pause, before navigation, and before closing. The top right shows save status.
-- Refresh reloads the folder tree and active note. If another app changed a note, Still Notes refuses to overwrite it. Copy any unsaved text you want to keep, then choose Reload from disk in the note menu.
-- Still Notes uses a neutral dark theme with rounded Material icons.
-- External web links open in your browser. Local Markdown links work when they point directly to a note relative to the current folder. Images with HTTPS URLs render when online.
+### Write and organize
 
-## Shortcuts
+- **Create:** right-click the sidebar, a folder, or a note to create in that location. `Ctrl+N` and `Ctrl+Shift+N` use the selected folder; click **Notes** above the tree to return to the root.
+- **Rename or move:** edit a note's title, or use its three-dot menu. Deleting a note or folder sends it to the Windows Recycle Bin.
+- **Read:** switch from **Write** to **Read** to preview Markdown. External links open in your browser; direct relative links to local Markdown notes open in the app. HTTPS images render when online.
+- **Reorganize:** drag onto the middle of a folder to move inside it, between rows to reorder, or onto **Notes** to move to the root.
+- **Import:** drag Markdown files from Windows Explorer onto a folder to import copies. The originals remain in place.
+- **Customize:** use **Change icon** on a note, or **Use default icon** to reset it. Folder icons are fixed. Drag the sidebar edge to resize it; double-click to reset its width.
+
+### Switch notebooks
+
+Click the folder name at the bottom of the sidebar to choose a saved notebook or **Open another folder**. Pending edits save before switching, and each folder remembers its last note and sidebar state.
+
+Use **× → Remove** to forget a saved folder, including one that is no longer available. This removes the list entry only; the folder and its notes remain on disk. Removing the active entry also closes that workspace.
+
+### Keep your files safe
+
+The top-right save status shows whether changes are on disk. **Refresh** reloads the tree and active note. If another app changes a note, Still Notes refuses to overwrite it: copy any unsaved text you want to keep, then choose **Reload from disk** in the note menu.
+
+Notes live in your chosen folder. Appearance, organization, and session preferences live separately in Windows application data. Back up your notes folder as you would other documents.
+
+An Obsidian vault can be opened as a folder, but Still Notes supports standard Markdown rather than Obsidian plugins, databases, canvases, or wiki-link extensions. Hidden configuration folders do not appear in the sidebar.
+
+## Keyboard shortcuts
 
 | Shortcut | Action |
-|---|---|
-| Ctrl+N | New note |
-| Ctrl+Shift+N | New folder |
-| Ctrl+S | Save now |
-| Ctrl+B / Ctrl+I | Markdown bold / italic |
-| Ctrl+E | Switch Write / Read |
-| Ctrl+\\ | Show / hide sidebar |
+| --- | --- |
+| `Ctrl+N` | New note |
+| `Ctrl+Shift+N` | New folder |
+| `Ctrl+S` | Save now |
+| `Ctrl+B` / `Ctrl+I` | Markdown bold / italic |
+| `Ctrl+E` | Switch Write / Read |
+| `Ctrl+\` | Show / hide sidebar |
 
-Notes stay where you choose. Appearance and last-opened-folder settings are stored separately in Windows application data. Back up your notes folder as you would any other documents.
+## Session restore
 
-## Restoring your session
+Still Notes remembers window size, position, and maximized state, and moves the window onto an available display if a monitor is disconnected. It also restores sidebar width and visibility, Read/Write mode, and each notebook's expanded folders, selected folder, open note, scroll position, and text selection. Folder state follows renames and moves.
 
-Still Notes reopens at its last window size and position, maximized if it was maximized before closing. Restore down returns to the remembered normal size. If a monitor is disconnected, the window is moved onto an available display.
+Session settings save as you work and before closing, switching notebooks, or restarting for an update.
 
-The sidebar's width and hidden/visible state are remembered, along with Read/Write mode. Each notes folder separately remembers its expanded folders, selected folder, last note, sidebar scroll position, and the last note's reading position and text selection. A deliberately collapsed folder stays collapsed even when it contains the open note. Folder state follows renames and moves.
+## Updates
 
-Session settings save as you work and are flushed before closing, switching repositories, or restarting for an update. Run `node tests/session.cjs` for restart checks, or `npm test` for window-placement and session-data tests alongside the updater checks.
+Public installers are available from [GitHub Releases](https://github.com/tsunsora/still-notes/releases/latest) without signing in. Run a newer installer to upgrade in place.
+
+**Current updater limitation:** the 1.6.2 code still targets the old `tsunsora/still` repository name and requires GitHub authentication through its private-feed configuration, even though this repository is now public. GitHub redirects the old repository URL here. The app may still display a message referring to a private repository; manual downloads are the straightforward option if automatic updates fail.
+
+For the existing automatic updater, sign in locally with `gh auth login --hostname github.com`, or supply a `GH_TOKEN` or `GITHUB_TOKEN` at launch with read access to the repository. Credentials stay in the main process and are not bundled with the app or update files. Writing notes does not require these credentials.
+
+The installed app checks after launch and every four hours, downloads newer stable versions in the background, and applies a ready update silently when you close it. **Restart to update** applies it immediately and restores your session. Both paths save pending notes and preferences first; a failed save keeps your edits open. Failed checks retry with increasing delays, and **Check for updates** offers a manual retry.
+
+Portable builds link to the installer. Development and automated test runs do not contact GitHub unless the optional live-feed check is explicitly run.
 
 ## Development
 
-With Node.js installed, run `npm ci`, then `npm start`. `npm run package` creates the portable Windows app in `../Still-Windows/Still Notes-win32-x64`. No installer is required for the portable build.
+Use **Windows and Node.js 22** (the version used by CI). Still Notes is built with **Electron**, with Marked for Markdown rendering and DOMPurify for sanitization.
 
-## Sidebar and appearance (1.2)
+```sh
+git clone https://github.com/tsunsora/still-notes.git
+cd still-notes
+npm ci
+npm start
+```
 
-- Drag a note or folder onto the middle of a folder row to move it inside.
-- Drag between rows, following the insertion line, to reorder items.
-- Drop onto Notes above the tree to move an item to the top level.
-- Drag Markdown files from Windows Explorer onto a folder to import copies. Originals stay where they are.
-- Drag the sidebar edge to resize it. Double-click the edge to reset. You can also focus the edge and use Left/Right.
-- Choose Change icon from a note menu. Choose Use default icon to reset it. Folders always use fixed closed/open icons and animate when expanded or collapsed; their icons cannot be customized.
-- Read/Write mode, sidebar width, order, and icons are remembered. Organization preferences are stored separately from your Markdown files.
-- Light mode has been removed. Motion respects Windows reduced-motion preferences.
+| Command | Result |
+| --- | --- |
+| `npm test` | Updater and session-state unit tests |
+| `npm run package` | Portable app in `../Still-Windows/Still Notes-win32-x64` |
+| `npm run installer` | Installer and update metadata in `../Still-Installer` |
 
-The Still Notes logo was generated using GPT Image. Interface icons use Google's rounded Material icons under the Apache 2.0 license; the license is included in the app.
-## Desktop-style sidebar (1.3)
+### Additional checks
 
-Right-click empty sidebar space to create a top-level note or folder. Right-click a folder to create inside it, or a note to create beside it. Notes show the standard note icon by default; icons you explicitly choose override it. Folders use outlined icons and indented note rows. Menus and dialogs use solid surfaces without gradient, blur, or drop-shadow effects.
+Run these on Windows with dependencies installed. Set `STILL_EXE` to a packaged executable when testing a build.
 
-## Notes folders and installer (1.4)
+| Command | Coverage |
+| --- | --- |
+| `node tests/ui.cjs` | UI and save-before-update behavior |
+| `node tests/session.cjs` | Session restoration across restarts |
+| `node tests/repositories.cjs` | Notebook switching and removal |
+| `node tests/folders.cjs` | Folder animation, icons, and reduced motion |
+| `node tests/identity.cjs` | Reuse of the existing Still profile |
+| `node tests/update-close.cjs` | Save handshakes before close/restart, using a simulated installer |
+| `node tests/github-feed.cjs` | Optional live authentication/metadata check; requires `STILL_EXE` pointing to an installer-built executable and a local GitHub login |
 
-Click the folder name at the bottom of the sidebar to see your saved local notes folders. Choose one to switch, or choose **Open another folder** to add one. Still Notes saves pending edits before switching and remembers the last note in each folder. Missing folders display an error without closing your current note.
+The live-feed check never downloads or installs an update.
 
-Use the **×** beside a saved folder and confirm **Remove** to remove it from the list, including folders that are no longer available. Removing the active folder saves pending edits and closes that workspace. This only forgets the list entry; the folder and its notes stay on disk. Removed entries stay removed after restarting, and you can add them again with **Open another folder**.
+### Publish a release
 
-The Windows installer lets you choose where to install and adds Start menu and desktop shortcuts. Your Markdown folders remain separate from the application. Uninstalling retains your app settings and notes.
+1. Update the version in `package.json` and `package-lock.json`, and edit [RELEASE-NOTES.md](RELEASE-NOTES.md).
+2. Push a matching `vVERSION` tag. The [Windows release workflow](.github/workflows/release.yml) checks the version, runs unit tests, builds the installer, and publishes a complete release through a draft.
+3. For manual releases, run `npm run installer` and upload **all three** files together: `Still-Notes-Setup-VERSION.exe`, its `.exe.blockmap`, and `latest.yml`. Publish a stable release tagged `vVERSION`.
 
-Build an installer with `npm ci` followed by `npm run installer`. Run the folder-switching checks with `node tests/repositories.cjs`. Windows builds are unsigned.
+The update feed needs `latest.yml` and its installer checksum. Local builds do not publish automatically. The current updater feed configuration described above still applies to installer builds.
 
-## Automatic updates (1.5)
+## Credits
 
-Install **Still-Notes-Setup-1.6.2.exe** once to enable automatic updates. The installed app checks the latest stable release in **tsunsora/still** ten seconds after launch and every four hours, and downloads newer versions in the background. Once ready, the update installs silently when you close Still Notes, without reopening the app. To use the new version immediately, click **Restart to update** at the bottom of the sidebar. Both paths save pending notes, session state, and preferences first; a failed save keeps the app open with your edits intact.
+The Still Notes logo was generated using GPT Image. Interface icons use Google's rounded Material icons under the Apache 2.0 license; the [license notice](src/MATERIAL-ICONS-LICENSE.txt) is included in the app.
 
-Failed checks and downloads retry automatically after one minute, backing off to at most once an hour. Waking the computer or reconnecting also retries a stale failed check. Background failures do not show a popup; **Check for updates** remains available for an immediate retry and error details. Manual restarts apply the update silently and reopen your saved session.
+## README counter
 
-The GitHub repository is private. Install GitHub CLI and run `gh auth login --hostname github.com` with an account that can read `tsunsora/still`. Alternatively, launch Still Notes with a `GH_TOKEN` or `GITHUB_TOKEN` environment variable that has read access to that repository's contents. Credentials are obtained locally at runtime, stay in the main process, and are not included in the app or its update files. The portable build links to the latest installer; development and automated test runs do not contact GitHub.
+[![Still Notes README counter](https://count.getloli.com/@tsunsora-still-notes?theme=capoo-2)](https://count.getloli.com/)
 
-### Publishing an update
-
-1. Increase the version in `package.json` and `package-lock.json`, and update `RELEASE-NOTES.md`.
-2. Build with `npm run installer`. Keep all three release files: `Still-Notes-Setup-VERSION.exe`, its `.exe.blockmap`, and `latest.yml`. The updater needs `latest.yml`, including the installer checksum.
-3. Publish those three files together in a stable GitHub release whose tag is `vVERSION`.
-
-The included `.github/workflows/release.yml` builds and tests when a matching version tag is pushed, uploads all three files to one draft release, then publishes it. This keeps incomplete update metadata out of the live feed. Its GitHub Actions token is used only for publishing. Local builds never publish automatically.
-
-Run updater state-machine tests with `npm test`, and UI / save-before-update checks with `node tests/ui.cjs`. Set `STILL_EXE` to a packaged executable to run the UI tests against a build.
-
-Run `node tests/update-close.cjs` to exercise the real close and restart save handshakes with a simulated installer. It checks that notes and session state are on disk before installation, and that closing does not request a relaunch.
-
-Run folder animation, open/closed icon, and note-only icon customization checks with `node tests/folders.cjs`. These checks also cover older saved folder icons and reduced-motion preferences.
-
-Run `node tests/identity.cjs` to check that the renamed app reuses an existing Still profile without moving or changing its notes.
-
-For an optional live GitHub authentication/metadata check, set `STILL_EXE` to an installer-built executable and run `node tests/github-feed.cjs`. This check uses your local login but never downloads or installs an update.
+Powered by [Moe Counter](https://github.com/journey-ad/Moe-Counter). This counts image requests, not unique visitors; GitHub image caching can affect the total.
