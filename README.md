@@ -130,8 +130,8 @@ The update feed needs `latest.yml` and its installer checksum. Local builds do n
 
 The Still Notes logo was generated using GPT Image. Interface icons use Google's rounded Material icons under the Apache 2.0 license; the [license notice](src/MATERIAL-ICONS-LICENSE.txt) is included in the app.
 
-## README counter
+## Visitors
 
-[![Still Notes README counter](https://count.getloli.com/@tsunsora-still-notes?theme=capoo-2)](https://count.getloli.com/)
+[![Still Notes visitor counter](https://count.getloli.com/@tsunsora-still-notes?theme=rule34&padding=8&offset=0&align=top&scale=1&pixelated=1&darkmode=auto)](https://count.getloli.com/)
 
 Powered by [Moe Counter](https://github.com/journey-ad/Moe-Counter). This counts image requests, not unique visitors; GitHub image caching can affect the total.
