@@ -4,6 +4,9 @@ if(process.versions.electron){
  const fs=require('node:fs'),path=require('node:path');
  const updates=require('../src/updates.cjs'),createUpdates=updates.createUpdates;
  class Updater extends EventEmitter{
+  configOnDisk={value:Promise.resolve({publisherName:'Test publisher'})};
+  installerPath='simulated-installer.exe';
+  async verifySignature(){return null;}
   setFeedURL(){}
   async checkForUpdates(){return {isUpdateAvailable:true,updateInfo:{version:'99.0.0'}};}
   async downloadUpdate(){this.emit('update-downloaded',{version:'99.0.0'});}
@@ -14,7 +17,7 @@ if(process.versions.electron){
    setImmediate(()=>app.quit());
   }
  }
- updates.createUpdates=options=>createUpdates({...options,disabledReason:'',updater:new Updater(),getToken:async()=>'test-credential'});
+ updates.createUpdates=options=>createUpdates({...options,disabledReason:'',updater:new Updater()});
  require('../src/main.cjs');
 }else{
  const {_electron:electron}=require('playwright');

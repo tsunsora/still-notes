@@ -25,8 +25,31 @@ jobs:
       - name: Check version matches release tag
         run: node -e "if(process.env.GITHUB_REF_NAME !== 'v'+require('./package.json').version) process.exit(1)"
       - run: npm test
+      - run: npm run test:integration
+      - name: Require release signing credentials
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+        run: |
+          if (-not $env:WIN_CSC_LINK) {
+            Write-Error "Configure WIN_CSC_LINK and WIN_CSC_KEY_PASSWORD repository secrets before publishing a Windows installer. Unsigned releases are blocked."
+            exit 1
+          }
       - name: Build installer and update metadata
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
         run: npm run installer
+      - name: Verify signed release artifacts
+        run: |
+          $version = node -p "require('./package.json').version"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $files = @("../Still-Installer/Still-Notes-Setup-$version.exe", "../Still-Installer/win-unpacked/Still Notes.exe")
+          foreach ($file in $files) {
+            $signature = Get-AuthenticodeSignature -LiteralPath $file
+            if ($signature.Status -ne 'Valid') { throw "Publisher signature verification failed: $file" }
+          }
+          $config = Get-Content -Raw -LiteralPath "../Still-Installer/win-unpacked/resources/app-update.yml"
+          if ($config -notmatch '(?m)^publisherName:') { throw "The update configuration must pin a publisher." }
       - name: Publish complete release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

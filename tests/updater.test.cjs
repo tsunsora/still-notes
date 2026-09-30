@@ -1,10 +1,13 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {EventEmitter}=require('node:events');
-const {createUpdates}=require('../src/updates.cjs');
+const {createUpdates,verifyUpdateTrust}=require('../src/updates.cjs');
 
 class Updater extends EventEmitter{
  checks=0;downloads=0;installs=0;available=true;
+ configOnDisk={value:Promise.resolve({publisherName:'Test publisher'})};
+ installerPath='simulated-installer.exe';
+ async verifySignature(){return null;}
  setFeedURL(feed){this.feed=feed;}
  async checkForUpdates(){this.checks++;return {isUpdateAvailable:this.available,updateInfo:{version:'1.6.0'}};}
  async downloadUpdate(){this.downloads++;this.emit('download-progress',{percent:54.7});this.emit('update-downloaded',{version:'1.6.0'});}
@@ -12,13 +15,13 @@ class Updater extends EventEmitter{
 }
 function setup(options={}){
  const updater=new Updater(),states=[];
- const service=createUpdates({updater,getToken:async()=>'test-credential',notify:state=>states.push(state),...options});
+ const service=createUpdates({updater,notify:state=>states.push(state),...options});
  return {updater,service,states};
 }
 test('downloads only stable newer updates, exposes progress, and keeps credentials out of UI state',async()=>{
  const {updater,service,states}=setup();
  assert.equal((await service.check()).status,'ready');
- assert.deepEqual(updater.feed,{provider:'github',owner:'tsunsora',repo:'still',private:true,token:'test-credential'});
+ assert.deepEqual(updater.feed,{provider:'github',owner:'tsunsora',repo:'still-notes',private:false});
  assert.equal(updater.allowPrerelease,false);assert.equal(updater.allowDowngrade,false);
  assert.equal(updater.autoInstallOnAppQuit,false);assert.equal(updater.autoDownload,false);
  assert(states.some(state=>state.status==='downloading'&&state.percent===54));
@@ -30,18 +33,32 @@ test('does not download when the installed version is current',async()=>{
  assert.equal((await service.check()).status,'current');assert.equal(updater.downloads,0);
  await assert.rejects(service.install(),/No downloaded update/);
 });
-test('coalesces concurrent checks while credentials are being resolved',async()=>{
+test('coalesces concurrent checks while publisher trust is being validated',async()=>{
  let release;const token=new Promise(resolve=>release=resolve);
- const {updater,service}=setup({getToken:()=>token});
+ const {updater,service}=setup({verifyTrust:()=>token});
  const first=service.check(),second=service.check();release('test-credential');
  await Promise.all([first,second]);assert.equal(updater.checks,1);assert.equal(updater.downloads,1);
 });
-test('missing authentication is recoverable and never calls GitHub without credentials',async()=>{
- let authenticated=false;
- const {updater,service}=setup({getToken:async()=>{if(authenticated)return 'test-credential';throw Object.assign(Error('private detail'),{code:'GITHUB_AUTH_REQUIRED'});}});
- assert.match((await service.check()).message,/gh auth login/);assert.equal(updater.checks,0);
- authenticated=true;assert.equal((await service.check()).status,'ready');
+test('missing publisher metadata prevents checks and downloads',async()=>{
+ const {updater,service}=setup();
+ updater.configOnDisk={value:Promise.resolve({})};
+ assert.match((await service.check()).message,/signed build/);
+ assert.equal(updater.checks,0);assert.equal(updater.downloads,0);
+ updater.configOnDisk={value:Promise.resolve({publisherName:'Test publisher'})};
+ assert.equal((await service.check()).status,'ready');
 });
+
+test('rejects missing, empty, and invalid publishers and unverifiable installers',async()=>{
+ for(const publisherName of [undefined,'',[],[''],[null]]){
+  await assert.rejects(verifyUpdateTrust({configOnDisk:{value:Promise.resolve({publisherName})}}),{code:'ERR_UPDATER_MISSING_PUBLISHER'});
+ }
+ await assert.rejects(verifyUpdateTrust({configOnDisk:{value:Promise.reject(Error('missing'))}}),{code:'ERR_UPDATER_MISSING_PUBLISHER'});
+ const {updater,service}=setup();await service.check();
+ updater.verifySignature=async()=> 'Signature is invalid';
+ await assert.rejects(service.install(),/publisher verification/);
+ assert.equal(updater.installs,0);assert.equal(service.snapshot().status,'error');
+});
+
 test('failed checks and downloads can be retried without exposing server or token details',async()=>{
  const {updater,service}=setup();
  updater.checkForUpdates=async()=>{throw Object.assign(Error('token test-credential'),{code:'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND'});};
@@ -81,7 +98,7 @@ test('installer launch errors restore normal close behavior',async()=>{
 });
 test('development and portable builds never check or download',async()=>{
  for(const disabledReason of ['development','portable']){
-  const service=createUpdates({disabledReason,updater:null,getToken:()=>{throw Error('must not request credentials');}});
+  const service=createUpdates({disabledReason,updater:null,verifyTrust:()=>{throw Error('must not verify disabled builds');}});
   service.start();assert.equal((await service.check()).status,'disabled');
   await assert.rejects(service.install(),/No downloaded update/);service.stop();
  }
@@ -115,7 +132,7 @@ test('manual retry bypasses backoff and a ready update stops polling',async t=>{
 test('stop cancels retries, including a check that finishes after shutdown',async t=>{
  t.mock.timers.enable({apis:['setTimeout','Date']});
  let release;const token=new Promise(resolve=>release=resolve);
- const {updater,service}=setup({getToken:()=>token});
+ const {updater,service}=setup({verifyTrust:()=>token});
  service.start();t.mock.timers.tick(10000);service.stop();release('test-credential');await settle();
  assert.equal(updater.checks,1);
  service.resume();t.mock.timers.tick(24*60*60000);await settle();assert.equal(updater.checks,1);
@@ -136,7 +153,7 @@ test('waking or reconnecting retries a stale failure without flooding checks',as
 });
 test('a manual check joining an automatic check keeps explicit error feedback',async()=>{
  let reject;const token=new Promise((_resolve,fail)=>reject=fail);
- const {service}=setup({getToken:()=>token});
+ const {service}=setup({verifyTrust:()=>token});
  const automatic=service.check({background:true}),manual=service.check();
  reject(Error('offline'));await Promise.all([automatic,manual]);
  assert.equal(service.snapshot().background,false);assert.equal(service.snapshot().status,'error');

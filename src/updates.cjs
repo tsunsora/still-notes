@@ -1,32 +1,33 @@
-const {execFile}=require('node:child_process');
-const {promisify}=require('node:util');
-const run=promisify(execFile);
 const POLL_INTERVAL=4*60*60*1000,RETRY_INTERVAL=60*1000,MAX_RETRY_INTERVAL=60*60*1000;
 
-// Credentials stay in the main process and are never written to update metadata.
-async function githubToken(){
- const supplied=process.env.GH_TOKEN||process.env.GITHUB_TOKEN;
- if(supplied?.trim())return supplied.trim();
- try{
-  const {stdout}=await run('gh',['auth','token','--hostname','github.com'],{windowsHide:true,timeout:10000,maxBuffer:16384});
-  if(stdout.trim())return stdout.trim();
- }catch{}
- const error=Error('Sign in with gh auth login to get updates from the private tsunsora/still repository.');
- error.code='GITHUB_AUTH_REQUIRED';throw error;
+async function verifyUpdateTrust(updater,{install=false}={}){
+ let config;
+ try{config=await updater.configOnDisk.value;}catch{}
+ const publishers=Array.isArray(config?.publisherName)?config.publisherName:[config?.publisherName];
+ if(!publishers.length||publishers.some(name=>typeof name!=='string'||!name.trim())){
+  throw Object.assign(Error('This build has no trusted update publisher.'),{code:'ERR_UPDATER_MISSING_PUBLISHER'});
+ }
+ if(install){
+  if(!updater.installerPath||typeof updater.verifySignature!=='function'||await updater.verifySignature(updater.installerPath)!==null){
+   throw Object.assign(Error('The downloaded installer did not pass publisher verification.'),{code:'ERR_UPDATER_INVALID_SIGNATURE'});
+  }
+ }
 }
 
-function createUpdates({updater,disabledReason='',notify=()=>{},getToken=githubToken,beforeInstall=async()=>{},installFailed=()=>{}}){
+function createUpdates({updater,disabledReason='',notify=()=>{},verifyTrust=verifyUpdateTrust,beforeInstall=async()=>{},installFailed=()=>{}}){
  let state={status:disabledReason?'disabled':'idle',reason:disabledReason,version:'',percent:0,message:'',background:false};
  let pending=null,timer,running=false,failures=0,lastCheck=0;
  const snapshot=()=>({...state});
  function publish(values){state={...state,...values};notify(snapshot());return snapshot();}
  function failed(error){
   if(state.status==='installing')installFailed();
-  const message=error?.code==='GITHUB_AUTH_REQUIRED'
-   ?'Sign in with gh auth login to get updates from the private tsunsora/still repository.'
+  const message=error?.code==='ERR_UPDATER_MISSING_PUBLISHER'
+   ?'Automatic updates require a signed build with a trusted publisher. Install a signed Still Notes release to enable them.'
+   :error?.code==='ERR_UPDATER_INVALID_SIGNATURE'
+    ?'The update did not pass publisher verification and will not be installed.'
    :error?.code==='ERR_UPDATER_CHANNEL_FILE_NOT_FOUND'
     ?'The latest GitHub release needs its latest.yml update file. Try again after an update-enabled release is published.'
-    :'Could not update Still Notes. Check your connection and GitHub repository access, then try again.';
+     :'Could not update Still Notes. Check your connection, then try again.';
   return publish({status:'error',message});
  }
  if(!disabledReason){
@@ -54,8 +55,8 @@ function createUpdates({updater,disabledReason='',notify=()=>{},getToken=githubT
   publish({status:'checking',message:'',version:'',percent:0,background});
   pending=(async()=>{
    try{
-    const token=await getToken();
-    updater.setFeedURL({provider:'github',owner:'tsunsora',repo:'still',private:true,token});
+    await verifyTrust(updater);
+    updater.setFeedURL({provider:'github',owner:'tsunsora',repo:'still-notes',private:false});
     const result=await updater.checkForUpdates();
     if(!result)throw Error('Update check did not complete.');
     if(!result.isUpdateAvailable)return publish({status:'current',message:''});
@@ -74,6 +75,7 @@ function createUpdates({updater,disabledReason='',notify=()=>{},getToken=githubT
  async function install({relaunch=true}={}){
   if(state.status!=='ready')throw Error('No downloaded update is ready to install.');
   publish({status:'installing',message:''});
+  try{await verifyTrust(updater,{install:true});}catch(error){failed(error);throw Error(state.message);}
   try{
    await beforeInstall();
   }catch(error){
@@ -94,4 +96,4 @@ function createUpdates({updater,disabledReason='',notify=()=>{},getToken=githubT
  function stop(){running=false;clearTimeout(timer);timer=null;}
  return {snapshot,check,install,start,stop,resume};
 }
-module.exports={createUpdates};
+module.exports={createUpdates,verifyUpdateTrust};

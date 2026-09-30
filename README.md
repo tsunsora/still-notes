@@ -23,7 +23,7 @@ A quiet space for Markdown notes on **Windows**. Your notebook is a folder of or
 2. Run it, choose an installation location, and launch **Still Notes**.
 3. Start in the automatically created **Documents/Still Notes** notebook, or use the folder button at the bottom of the sidebar to open an existing folder.
 
-Windows builds are unsigned. The installer adds Start menu and desktop shortcuts. Notes remain separate from the application, and uninstalling retains your notes and app settings.
+Installer builds from 1.6.3 require Windows code signing; earlier releases were unsigned. The installer adds Start menu and desktop shortcuts. Notes remain separate from the application, and uninstalling retains your notes and app settings.
 
 You can also build a portable copy using the [development instructions](#development). Run `Still Notes.exe` from the resulting `Still Notes-win32-x64` folder and keep its companion files beside it.
 
@@ -35,9 +35,9 @@ Still Notes is the new name for the same app. The installer upgrades existing in
 
 ### Write and organize
 
-- **Create:** right-click the sidebar, a folder, or a note to create in that location. `Ctrl+N` and `Ctrl+Shift+N` use the selected folder; click **Notes** above the tree to return to the root.
+- **Create:** right-click the sidebar, a folder, or a note to create in that location. `Ctrl+N` and `Ctrl+Shift+N` use the selected folder; click **Notes** above the tree to return to the root. Names starting with a dot are rejected because those items would be hidden in the sidebar.
 - **Rename or move:** edit a note's title, or use its three-dot menu. Deleting a note or folder sends it to the Windows Recycle Bin.
-- **Read:** switch from **Write** to **Read** to preview Markdown. External links open in your browser; direct relative links to local Markdown notes open in the app. HTTPS images render when online.
+- **Read:** switch from **Write** to **Read** to preview Markdown. External links open in your browser; relative links such as `./Note.md` and `../Note.md` open notes within the notebook. HTTPS images render when online.
 - **Reorganize:** drag onto the middle of a folder to move inside it, between rows to reorder, or onto **Notes** to move to the root.
 - **Import:** drag Markdown files from Windows Explorer onto a folder to import copies. The originals remain in place.
 - **Customize:** use **Change icon** on a note, or **Use default icon** to reset it. Folder icons are fixed. Drag the sidebar edge to resize it; double-click to reset its width.
@@ -51,6 +51,12 @@ Use **× → Remove** to forget a saved folder, including one that is no longer 
 ### Keep your files safe
 
 The top-right save status shows whether changes are on disk. **Refresh** reloads the tree and active note. If another app changes a note, Still Notes refuses to overwrite it: copy any unsaved text you want to keep, then choose **Reload from disk** in the note menu.
+
+During note loading, the editor and title are temporarily read-only. Launching Still Notes again brings the existing window forward instead of opening a second process using the same profile.
+
+Each save preserves the previous disk revision in a `.still-recovery` folder beside the note. This also preserves edits made through a file handle another editor kept open during replacement. If a save is interrupted while the note path is absent, the next scan restores that disk revision. These copies are retained until you remove them manually and can grow over time. To recover a copy, move it to a separate folder and rename its `.bak` extension to `.md`.
+
+Saving requires a filesystem that supports hard links, such as NTFS. Unsupported filesystems leave your edits in the app and restore the original note; use a supported notebook location.
 
 Notes live in your chosen folder. Appearance, organization, and session preferences live separately in Windows application data. Back up your notes folder as you would other documents.
 
@@ -77,9 +83,9 @@ Session settings save as you work and before closing, switching notebooks, or re
 
 Public installers are available from [GitHub Releases](https://github.com/tsunsora/still-notes/releases/latest) without signing in. Run a newer installer to upgrade in place.
 
-**Current updater limitation:** the 1.6.2 code still targets the old `tsunsora/still` repository name and requires GitHub authentication through its private-feed configuration, even though this repository is now public. GitHub redirects the old repository URL here. The app may still display a message referring to a private repository; manual downloads are the straightforward option if automatic updates fail.
+Version 1.6.3 uses the public `tsunsora/still-notes` feed without GitHub authentication. Versions through 1.6.2 used the older authenticated feed; manually install a signed release if that updater cannot retrieve it.
 
-For the existing automatic updater, sign in locally with `gh auth login --hostname github.com`, or supply a `GH_TOKEN` or `GITHUB_TOKEN` at launch with read access to the repository. Credentials stay in the main process and are not bundled with the app or update files. Writing notes does not require these credentials.
+Automatic updates require a trusted publisher in the installed build's update configuration. The downloaded installer must pass Windows publisher verification, which is repeated before installation. Builds without publisher metadata refuse automatic downloads and installation.
 
 The installed app checks after launch and every four hours, downloads newer stable versions in the background, and applies a ready update silently when you close it. **Restart to update** applies it immediately and restores your session. Both paths save pending notes and preferences first; a failed save keeps your edits open. Failed checks retry with increasing delays, and **Check for updates** offers a manual retry.
 
@@ -98,9 +104,10 @@ npm start
 
 | Command | Result |
 | --- | --- |
-| `npm test` | Updater and session-state unit tests |
+| `npm test` | Updater, session-state, note storage, and relative-link unit tests |
+| `npm run test:integration` | All UI and integration checks, including audit regressions |
 | `npm run package` | Portable app in `../Still-Windows/Still Notes-win32-x64` |
-| `npm run installer` | Installer and update metadata in `../Still-Installer` |
+| `npm run installer` | Signed installer and update metadata in `../Still-Installer`; requires signing credentials |
 
 ### Additional checks
 
@@ -108,23 +115,25 @@ Run these on Windows with dependencies installed. Set `STILL_EXE` to a packaged 
 
 | Command | Coverage |
 | --- | --- |
+| `node tests/regressions.cjs` | Navigation editing guards, relative links, root deletion guards, capitalization-only renames, hidden-name rejection, and single-instance behavior |
 | `node tests/ui.cjs` | UI and save-before-update behavior |
 | `node tests/session.cjs` | Session restoration across restarts |
 | `node tests/repositories.cjs` | Notebook switching and removal |
 | `node tests/folders.cjs` | Folder animation, icons, and reduced motion |
 | `node tests/identity.cjs` | Reuse of the existing Still profile |
 | `node tests/update-close.cjs` | Save handshakes before close/restart, using a simulated installer |
-| `node tests/github-feed.cjs` | Optional live authentication/metadata check; requires `STILL_EXE` pointing to an installer-built executable and a local GitHub login |
+| `node tests/github-feed.cjs` | Optional public-feed metadata check; requires `STILL_EXE` pointing to a signed installer-built executable |
 
 The live-feed check never downloads or installs an update.
 
 ### Publish a release
 
 1. Update the version in `package.json` and `package-lock.json`, and edit [RELEASE-NOTES.md](RELEASE-NOTES.md).
-2. Push a matching `vVERSION` tag. The [Windows release workflow](.github/workflows/release.yml) checks the version, runs unit tests, builds the installer, and publishes a complete release through a draft.
-3. For manual releases, run `npm run installer` and upload **all three** files together: `Still-Notes-Setup-VERSION.exe`, its `.exe.blockmap`, and `latest.yml`. Publish a stable release tagged `vVERSION`.
+2. Configure `WIN_CSC_LINK` (a certificate path or base64 PFX) and `WIN_CSC_KEY_PASSWORD` repository secrets for a trusted Windows code-signing certificate. Local builds use the same environment variables. Do not commit the certificate or its password.
+3. Push a matching `vVERSION` tag. The [Windows release workflow](.github/workflows/release.yml) checks the version, runs unit and integration tests, builds the signed installer, verifies both executable signatures and publisher metadata, and publishes a complete release through a draft. Missing signing credentials or invalid signatures stop publication.
+4. For manual releases, run `npm run installer` with signing credentials and upload **all three** files together: `Still-Notes-Setup-VERSION.exe`, its `.exe.blockmap`, and `latest.yml`. Publish a stable release tagged `vVERSION`.
 
-The update feed needs `latest.yml` and its installer checksum. Local builds do not publish automatically. The current updater feed configuration described above still applies to installer builds.
+The update feed needs `latest.yml`, its installer checksum, and publisher metadata embedded in the installed app. The installer build has `forceCodeSigning` enabled and cannot succeed unsigned. Local builds do not publish automatically. Portable development builds can be created without signing and do not enable automatic updates.
 
 ## Credits
 

@@ -1,17 +1,25 @@
-# Still Notes 1.6.2
+# Still Notes 1.6.3
 
 ## What's new
 
-- Removes the white outline from New note and other right-click menu items, using a subtle background highlight for keyboard focus.
-- Installs downloaded updates silently when you close Still Notes, without reopening the app. Restart to update remains available when you want the new version immediately.
-- Saves notes, session state, and preferences before either update path. If saving fails, the app stays open with your edits intact.
-- Automatically retries failed update checks and downloads with increasing delays, and retries stale failures after waking or reconnecting.
-- Keeps background update failures quiet while retaining manual checks and error details.
+- Keeps the editor and title read-only while loading another note, preventing edits from disappearing during navigation.
+- Preserves replaced disk revisions in a `.still-recovery` folder beside each note. Late changes from another editor cannot be silently discarded, and interrupted replacements recover on the next scan.
+- Opens `./` and `../` Markdown links correctly, including encoded filenames, while rejecting links outside the notebook.
+- Supports capitalization-only renames on Windows and rejects names starting with a dot instead of hiding newly created notes.
+- Rejects every path that resolves to the notebook root in the delete handler.
+- Reuses the existing window when launched again and writes settings through unique temporary files.
+- Uses the public `tsunsora/still-notes` update feed without requiring a GitHub login.
+- Requires signed installer builds and a trusted update publisher. Publisher signatures are checked again before installation; unsigned releases are blocked.
+- Adds regression coverage to the release workflow, alongside the existing integration and unit checks.
 
 ## Install or upgrade
 
-Download **Still-Notes-Setup-1.6.2.exe** below and run it. Existing installations upgrade in place, including their shortcuts. Notes, saved repositories, and preferences are preserved using the existing application profile.
+When the signed installer is available, download **Still-Notes-Setup-1.6.3.exe** and run it. Existing installations upgrade in place, including their shortcuts. Notes, saved repositories, and preferences are preserved using the existing application profile.
 
-Installed versions can also get this release through the GitHub updater. The repository is private, so automatic update access uses your local GitHub CLI login or runtime GitHub token, as documented in the README.
+Installer publication requires configured Windows signing credentials. Source code and the version tag can be published before those credentials are available; an unsigned installer will not be published as a workaround.
+
+Versions through 1.6.2 used the old authenticated update feed. If that updater cannot retrieve this release, install the signed installer manually. Version 1.6.3 uses the public feed without authentication.
 
 The accompanying `latest.yml` and `.exe.blockmap` files support automatic updates; only the installer needs to be opened manually.
+
+Recovery copies are retained until you remove them manually. To recover an older version, copy the desired `.bak` file from `.still-recovery` to a separate folder and rename its extension to `.md`. Keep backups of your notebook as usual.

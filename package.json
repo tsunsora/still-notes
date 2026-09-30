@@ -1,7 +1,7 @@
 {
   "name": "still-notes",
   "productName": "Still Notes",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "description": "A quiet space for Markdown notes",
   "main": "src/main.cjs",
   "author": "Still Notes",
@@ -10,7 +10,8 @@
     "start": "electron .",
     "package": "electron-packager . \"Still Notes\" --platform=win32 --arch=x64 --out=../Still-Windows --overwrite --asar --icon=src/icon.ico --ignore=tests --ignore=README.md",
     "installer": "electron-builder --win nsis --x64 --publish never",
-    "test": "node --test tests/updater.test.cjs tests/session-state.test.cjs"
+    "test": "node --test tests/updater.test.cjs tests/session-state.test.cjs tests/note-storage.test.cjs tests/note-links.test.cjs",
+    "test:integration": "node tests/regressions.cjs && node tests/ui.cjs && node tests/session.cjs && node tests/repositories.cjs && node tests/folders.cjs && node tests/identity.cjs && node tests/update-close.cjs"
   },
   "dependencies": {
     "dompurify": "3.4.15",
@@ -26,13 +27,14 @@
     "sharp": "^0.35.4"
   },
   "build": {
+    "forceCodeSigning": true,
     "appId": "com.still.notes",
     "productName": "Still Notes",
     "publish": {
       "provider": "github",
       "owner": "tsunsora",
-      "repo": "still",
-      "private": true,
+      "repo": "still-notes",
+      "private": false,
       "releaseType": "release"
     },
     "directories": {
@@ -46,7 +48,8 @@
       "target": [
         "nsis"
       ],
-      "icon": "src/icon.ico"
+      "icon": "src/icon.ico",
+      "verifyUpdateCodeSignature": true
     },
     "nsis": {
       "oneClick": false,

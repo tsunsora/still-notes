@@ -4,17 +4,23 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { pathToFileURL } = require('node:url');
 const {createUpdates}=require('./updates.cjs');
+const {saveNote,recoverInterruptedSaves}=require('./note-storage.cjs');
 const {normalizeWorkspaceState,remapWorkspaceState,removeWorkspacePaths,restoreWindowState}=require('./session-state.cjs');
 app.setName('Still Notes');
 // Keep the existing profile across the product rename so upgrades retain all
 // repositories, note metadata, and saved window/workspace state.
 app.setPath('userData',process.env.STILL_TEST_DATA||path.join(app.getPath('appData'),'Still'));
+// Acquire the profile lock before reading or writing shared settings.
+if(!app.requestSingleInstanceLock()){
+ app.quit();
+}else{
 let win, updates, root = '', settings = {}, closing = false;
+app.on('second-instance',()=>{if(win&&!win.isDestroyed()){if(win.isMinimized())win.restore();win.show();win.focus();}});
 const revisions = new Map();
 const hash = s => crypto.createHash('sha256').update(s).digest('hex');
 const cfg = () => path.join(app.getPath('userData'), 'settings.json');
 let settingsWrites=Promise.resolve();
-function saveSettings() {const value=JSON.stringify(settings);const op=settingsWrites.catch(()=>{}).then(async()=>{await fs.mkdir(app.getPath('userData'),{recursive:true});await fs.writeFile(cfg()+'.tmp',value);await fs.rename(cfg()+'.tmp',cfg());});settingsWrites=op;return op;}
+function saveSettings() {const value=JSON.stringify(settings);const op=settingsWrites.catch(()=>{}).then(async()=>{await fs.mkdir(app.getPath('userData'),{recursive:true});const temp=cfg()+'.'+crypto.randomUUID()+'.tmp';try{await fs.writeFile(temp,value,{flag:'wx'});await fs.rename(temp,cfg());}finally{await fs.unlink(temp).catch(()=>{});}});settingsWrites=op;return op;}
 let windowSaveTimer;
 function captureWindowState(){
  if(win&&!win.isDestroyed()&&!win.isMinimized())settings.window={bounds:win.getNormalBounds(),maximized:win.isMaximized()};
@@ -37,11 +43,15 @@ async function safe(relative = '', exists = true) {
   return target;
 }
 function validName(name) {
-  if (typeof name !== 'string' || !name.trim() || /[<>:"/\\|?*\x00-\x1f]/.test(name) || /[. ]$/.test(name) || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i.test(name) || name.length > 160) throw Error('Use a valid file name without slashes or special characters.');
-  return name.trim();
+  if(typeof name!=='string')throw Error('Use a valid file name.');
+  name=name.trim();
+  if(name.startsWith('.'))throw Error('Names cannot start with a dot. Hidden items are not shown in the sidebar.');
+  if (!name || /[<>:"/\\|?*\x00-\x1f]/.test(name) || /[. ]$/.test(name) || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i.test(name) || name.length > 160) throw Error('Use a valid file name without slashes or special characters.');
+  return name;
 }
 async function scan(dir = '') {
-  const entries = await fs.readdir(await safe(dir), {withFileTypes:true});
+  const folder=await safe(dir);await recoverInterruptedSaves(folder);
+  const entries = await fs.readdir(folder, {withFileTypes:true});
   const result = [];
   for (const entry of entries) {
     if (entry.name.startsWith('.') || entry.isSymbolicLink()) continue;
@@ -94,11 +104,8 @@ let writes = Promise.resolve();
 handle('write', (rel, content) => {
   const operation = writes.then(async () => {
     if (typeof content !== 'string' || Buffer.byteLength(content) > 8*1024*1024 || !revisions.has(rel)) throw Error('Open this note before saving it.');
-    const file = await safe(rel); const disk = await fs.readFile(file,'utf8');
-    if (hash(disk) !== revisions.get(rel)) throw Error('This note changed in another app. Your edits are kept here. Copy them, then reopen the note to load the latest version.');
-    const temp = file + '.still-' + crypto.randomUUID() + '.tmp';
-    try { await fs.writeFile(temp,content,{flag:'wx'}); await fs.rename(temp,file); }
-    finally { await fs.unlink(temp).catch(()=>{}); }
+    const file = await safe(rel);
+    await saveNote(file,content,revisions.get(rel));
     revisions.set(rel,hash(content)); return true;
   });
   writes=operation.catch(()=>{}); return operation;
@@ -116,8 +123,17 @@ handle('rename', async (rel,name) => {
   if(stat.isFile()&&!/\.md$/i.test(name)) name+='.md';
   const next=path.join(path.dirname(rel),name); if(next===rel) return next;
   const dest=await safe(next,false);
-  try { await fs.access(dest); throw Error('An item with that name already exists.'); } catch(e) { if(e.code!=='ENOENT') throw e; }
-  await fs.rename(old,dest); migrateMeta(rel,next);revisions.clear();await saveSettings();return next;
+  if(process.platform==='win32'&&old.toLowerCase()===dest.toLowerCase()){
+    const existing=await fs.stat(dest).catch(error=>{if(error.code!=='ENOENT')throw error;return null;});
+    if(existing&&(existing.dev!==stat.dev||existing.ino!==stat.ino))throw Error('An item with that name already exists.');
+    const temp=old+'.still-'+crypto.randomUUID()+'.tmp';
+    await fs.rename(old,temp);
+    try{await fs.rename(temp,dest);}catch(error){await fs.rename(temp,old);throw error;}
+  }else{
+    try { await fs.access(dest); throw Error('An item with that name already exists.'); } catch(e) { if(e.code!=='ENOENT') throw e; }
+    await fs.rename(old,dest);
+  }
+  migrateMeta(rel,next);revisions.clear();await saveSettings();return next;
 });
 async function moveItem(rel,parent){
   const old=await safe(rel); const next=path.join(parent,path.basename(rel));
@@ -138,7 +154,7 @@ handle('place',async(rel,parent,anchor='',position='after')=>{
   const m=workspaceMeta();const orders=new Map(m.orders);orders.set(parent,items);m.orders=Array.from(orders);await saveSettings();return {path:next,tree:await scan()};
 });
 handle('set-icon',async(rel,id)=>{const file=await safe(rel);if(!(await fs.stat(file)).isFile()||!/\.md$/i.test(rel))throw Error('Only note icons can be changed.');const catalog=require('./icon-catalog.json');if(id!==null&&!catalog.includes(id))throw Error('Unknown icon.');const m=workspaceMeta();const icons=new Map(m.icons);id===null?icons.delete(rel):icons.set(rel,id);m.icons=Array.from(icons);await saveSettings();return Object.fromEntries(icons);});
-handle('import',async(files,parent)=>{if(!Array.isArray(files)||files.length>100)throw Error('Drop up to 100 Markdown files at a time.');await safe(parent);const imported=[];for(const source of files){if(typeof source!=='string'||!path.isAbsolute(source)||!source.toLowerCase().endsWith('.md'))throw Error('Only Markdown (.md) files can be imported.');const stat=await fs.stat(source);if(!stat.isFile()||stat.size>8*1024*1024)throw Error('Each note must be a file under 8 MB.');}
+handle('import',async(files,parent)=>{if(!Array.isArray(files)||files.length>100)throw Error('Drop up to 100 Markdown files at a time.');await safe(parent);const imported=[];for(const source of files){if(typeof source!=='string'||!path.isAbsolute(source)||!source.toLowerCase().endsWith('.md'))throw Error('Only Markdown (.md) files can be imported.');validName(path.basename(source));const stat=await fs.stat(source);if(!stat.isFile()||stat.size>8*1024*1024)throw Error('Each note must be a file under 8 MB.');}
   for(const source of files){const original=path.basename(source);let name=original,index=2;for(;;){const rel=path.join(parent,name);try{await fs.copyFile(source,await safe(rel,false),require('node:fs').constants.COPYFILE_EXCL);imported.push(rel);break;}catch(e){if(e.code!=='EEXIST')throw e;name=path.basename(original,'.md')+' ('+index+++').md';}}}return {paths:imported,tree:await scan()};});
 handle('preferences',async values=>{
  if(values.mode==='edit'||values.mode==='preview')settings.mode=values.mode;
@@ -147,7 +163,7 @@ handle('preferences',async values=>{
  if(root&&values.workspaceRoot===root&&values.session){const session=normalizeWorkspaceState(values.session);if(session)workspaceMeta().session=session;}
  delete settings.theme;await saveSettings();return true;
 });
-handle('trash', async rel => { if(!rel) throw Error('Cannot remove the notes folder.'); await shell.trashItem(await safe(rel));const m=workspaceMeta();const keep=p=>p!==rel&&!p.startsWith(rel+path.sep);m.icons=m.icons.filter(([p])=>keep(p));m.orders=m.orders.filter(([p])=>keep(p)).map(([p,items])=>[p,items.filter(keep)]);if(m.session)m.session=removeWorkspacePaths(m.session,rel);if(settings.last&&!keep(settings.last))settings.last='';if(m.last&&!keep(m.last))m.last='';revisions.clear();await saveSettings();return true; });
+handle('trash', async rel => { const file=await safe(rel);if(path.relative(root,file)===''||path.relative(root,await fs.realpath(file))==='')throw Error('Cannot remove the notes folder.'); await shell.trashItem(file);const m=workspaceMeta();const keep=p=>p!==rel&&!p.startsWith(rel+path.sep);m.icons=m.icons.filter(([p])=>keep(p));m.orders=m.orders.filter(([p])=>keep(p)).map(([p,items])=>[p,items.filter(keep)]);if(m.session)m.session=removeWorkspacePaths(m.session,rel);if(settings.last&&!keep(settings.last))settings.last='';if(m.last&&!keep(m.last))m.last='';revisions.clear();await saveSettings();return true; });
 handle('reveal', async () => {if(root) await shell.openPath(root);});
 handle('external', async url => {if(typeof url==='string' && /^https?:\/\//i.test(url)) await shell.openExternal(url);});
 handle('window', async action => {if(action==='minimize')win.minimize();if(action==='maximize')win.isMaximized()?win.unmaximize():win.maximize();if(action==='close')win.close();});
@@ -195,3 +211,4 @@ app.whenReady().then(async()=>{
   await win.loadURL(pathToFileURL(path.join(__dirname,'index.html')).href);if(restoredWindow.maximized)win.maximize();win.show();updates.start();
 });
 app.on('window-all-closed',()=>{clearTimeout(windowSaveTimer);updates?.stop();app.quit();});
+}

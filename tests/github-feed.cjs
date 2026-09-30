@@ -1,5 +1,5 @@
 // Optional live smoke check: STILL_EXE must point to an installer-built executable.
-// Uses the local GitHub login, checks the private feed, and never downloads/installs.
+// Checks the public feed and installed publisher metadata; never downloads/installs.
 const {_electron:electron}=require('playwright');
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict');
 (async()=>{
@@ -16,8 +16,8 @@ const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:
    autoUpdater.downloadUpdate=async()=>{};
    return createUpdates({updater:autoUpdater}).check();
   });
-  if(result.status==='error')assert.match(result.message,/latest.yml/,'The private GitHub feed could not be reached with the local credentials.');
+  if(result.status==='error')assert.match(result.message,/latest.yml/,'The signed public GitHub update feed could not be reached.');
   else assert(['current','downloading'].includes(result.status));
-  console.log(result.status==='error'?'PASS: authenticated private GitHub access; current release is awaiting latest.yml.':'PASS: authenticated GitHub update metadata is readable (download and install disabled).');
+  console.log(result.status==='error'?'PASS: signed public GitHub access; current release is awaiting latest.yml.':'PASS: public GitHub update metadata is readable and publisher metadata is configured (download and install disabled).');
  }finally{await app.close().catch(()=>{});await fs.rm(temp,{recursive:true,force:true});}
 })().catch(error=>{console.error(error);process.exitCode=1;});
