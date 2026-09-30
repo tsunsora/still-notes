@@ -8,7 +8,7 @@ const {saveNote,recoverInterruptedSaves}=require('../src/note-storage.cjs');
 const hash=s=>crypto.createHash('sha256').update(s).digest('hex');
 
 async function fixture(t){
- const folder=await fs.mkdtemp(path.join(os.tmpdir(),'still-storage-'));
+ const folder=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'still-storage-')));
  t.after(()=>fs.rm(folder,{recursive:true,force:true}));
  const file=path.join(folder,'Note.md');await fs.writeFile(file,'Original');
  const recovery=path.join(folder,'.still-recovery');

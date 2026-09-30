@@ -1,7 +1,7 @@
 const {_electron:electron}=require('playwright');
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto'),assert=require('node:assert/strict');
 (async()=>{
- const temp=await fs.mkdtemp(path.join(os.tmpdir(),'still-folders-')),root=path.join(temp,'Notes'),data=path.join(temp,'profile');
+ const temp=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'still-folders-'))),root=path.join(temp,'Notes'),data=path.join(temp,'profile');
  await fs.mkdir(path.join(root,'Folder','Nested'),{recursive:true});await fs.mkdir(path.join(root,'Empty.md'));await fs.mkdir(data);
  await fs.writeFile(path.join(root,'Test.md'),'Folder behavior');
  await fs.writeFile(path.join(root,'Folder','Child.md'),'child');await fs.writeFile(path.join(root,'Folder','Nested','Deep.md'),'deep');

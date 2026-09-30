@@ -23,7 +23,7 @@ A quiet space for Markdown notes on **Windows**. Your notebook is a folder of or
 2. Run it, choose an installation location, and launch **Still Notes**.
 3. Start in the automatically created **Documents/Still Notes** notebook, or use the folder button at the bottom of the sidebar to open an existing folder.
 
-Installer builds from 1.6.3 require Windows code signing; earlier releases were unsigned. The installer adds Start menu and desktop shortcuts. Notes remain separate from the application, and uninstalling retains your notes and app settings.
+Installer builds from 1.6.4 require Windows code signing; earlier releases were unsigned. The installer adds Start menu and desktop shortcuts. Notes remain separate from the application, and uninstalling retains your notes and app settings.
 
 You can also build a portable copy using the [development instructions](#development). Run `Still Notes.exe` from the resulting `Still Notes-win32-x64` folder and keep its companion files beside it.
 
@@ -83,7 +83,7 @@ Session settings save as you work and before closing, switching notebooks, or re
 
 Public installers are available from [GitHub Releases](https://github.com/tsunsora/still-notes/releases/latest) without signing in. Run a newer installer to upgrade in place.
 
-Version 1.6.3 uses the public `tsunsora/still-notes` feed without GitHub authentication. Versions through 1.6.2 used the older authenticated feed; manually install a signed release if that updater cannot retrieve it.
+Version 1.6.4 uses the public `tsunsora/still-notes` feed without GitHub authentication. Versions through 1.6.2 used the older authenticated feed; manually install a signed release if that updater cannot retrieve it.
 
 Automatic updates require a trusted publisher in the installed build's update configuration. The downloaded installer must pass Windows publisher verification, which is repeated before installation. Builds without publisher metadata refuse automatic downloads and installation.
 

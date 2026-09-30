@@ -1,7 +1,7 @@
 const {_electron:electron}=require('playwright');
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict');
 (async()=>{
- const temp=await fs.mkdtemp(path.join(os.tmpdir(),'still-repositories-')),data=path.join(temp,'profile'),a=path.join(temp,'Alpha'),b=path.join(temp,'Beta'),defaultNotes=path.join(temp,'Default');
+ const temp=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'still-repositories-'))),data=path.join(temp,'profile'),a=path.join(temp,'Alpha'),b=path.join(temp,'Beta'),defaultNotes=path.join(temp,'Default');
  for(const p of [data,a,b])await fs.mkdir(p);
  await fs.writeFile(path.join(a,'First.md'),'alpha');await fs.writeFile(path.join(a,'Second.md'),'second');await fs.writeFile(path.join(b,'Other.md'),'beta');
  await fs.writeFile(path.join(data,'settings.json'),JSON.stringify({root:a,last:'Second.md'}));

@@ -1,7 +1,7 @@
 const {_electron:electron}=require('playwright');
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict');
 (async()=>{
- const temp=await fs.mkdtemp(path.join(os.tmpdir(),'still-session-')),data=path.join(temp,'profile'),a=path.join(temp,'Alpha'),b=path.join(temp,'Beta');
+ const temp=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'still-session-'))),data=path.join(temp,'profile'),a=path.join(temp,'Alpha'),b=path.join(temp,'Beta');
  await fs.mkdir(data);await fs.mkdir(path.join(a,'Projects','Nested'),{recursive:true});await fs.mkdir(path.join(a,'Reference'));await fs.mkdir(path.join(b,'Work'),{recursive:true});
  for(let i=0;i<30;i++)await fs.mkdir(path.join(a,'Z'+String(i).padStart(2,'0')));
  await fs.writeFile(path.join(a,'Projects','Nested','Deep.md'),Array.from({length:180},(_,i)=>`Paragraph ${i}: A long note to restore the reading position.\n\n`).join(''));

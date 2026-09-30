@@ -23,7 +23,7 @@ if(process.versions.electron){
  const {_electron:electron}=require('playwright');
  const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict');
  (async()=>{
-  const temp=await fs.mkdtemp(path.join(os.tmpdir(),'still-update-close-'));
+  const temp=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'still-update-close-')));
   try{
    for(const relaunch of [false,true]){
     const profile=path.join(temp,relaunch?'restart':'close'),root=path.join(profile,'Notes');

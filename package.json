@@ -1,7 +1,7 @@
 {
   "name": "still-notes",
   "productName": "Still Notes",
-  "version": "1.6.3",
+  "version": "1.6.4",
   "description": "A quiet space for Markdown notes",
   "main": "src/main.cjs",
   "author": "Still Notes",

@@ -1,4 +1,4 @@
-# Still Notes 1.6.3
+# Still Notes 1.6.4
 
 ## What's new
 
@@ -14,11 +14,11 @@
 
 ## Install or upgrade
 
-When the signed installer is available, download **Still-Notes-Setup-1.6.3.exe** and run it. Existing installations upgrade in place, including their shortcuts. Notes, saved repositories, and preferences are preserved using the existing application profile.
+When the signed installer is available, download **Still-Notes-Setup-1.6.4.exe** and run it. Existing installations upgrade in place, including their shortcuts. Notes, saved repositories, and preferences are preserved using the existing application profile.
 
 Installer publication requires configured Windows signing credentials. Source code and the version tag can be published before those credentials are available; an unsigned installer will not be published as a workaround.
 
-Versions through 1.6.2 used the old authenticated update feed. If that updater cannot retrieve this release, install the signed installer manually. Version 1.6.3 uses the public feed without authentication.
+Versions through 1.6.2 used the old authenticated update feed. If that updater cannot retrieve this release, install the signed installer manually. Version 1.6.4 uses the public feed without authentication.
 
 The accompanying `latest.yml` and `.exe.blockmap` files support automatic updates; only the installer needs to be opened manually.
 

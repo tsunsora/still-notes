@@ -1,7 +1,7 @@
 const {_electron:electron}=require('playwright');
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto'),assert=require('node:assert/strict');
 (async()=>{
- const temp=await fs.mkdtemp(path.join(os.tmpdir(),'still-identity-')),appData=path.join(temp,'Roaming'),legacy=path.join(appData,'Still'),notes=path.join(temp,'Existing notes');
+ const temp=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'still-identity-'))),appData=path.join(temp,'Roaming'),legacy=path.join(appData,'Still'),notes=path.join(temp,'Existing notes');
  await fs.mkdir(legacy,{recursive:true});await fs.mkdir(path.join(notes,'Folder'),{recursive:true});
  const last=path.join('Folder','Saved.md'),content='Existing notes survive the product rename.';
  await fs.writeFile(path.join(notes,last),content);

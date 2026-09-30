@@ -5,7 +5,7 @@ const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:
 const appPath=path.resolve(__dirname,'..');
 
 async function fixture(files,run){
- const temp=await fs.mkdtemp(path.join(os.tmpdir(),'still-regressions-'));
+ const temp=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'still-regressions-')));
  const root=path.join(temp,'Notes'),data=path.join(temp,'profile'),bootstrap=path.join(temp,'bootstrap.cjs');
  await fs.mkdir(root);await fs.mkdir(data);
  for(const [name,content]of Object.entries(files)){
