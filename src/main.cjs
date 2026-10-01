@@ -3,7 +3,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { pathToFileURL } = require('node:url');
-const {createUpdates}=require('./updates.cjs');
+const {createUpdates,verifyUpdateTrust}=require('./updates.cjs');
 const {saveNote,recoverInterruptedSaves}=require('./note-storage.cjs');
 const {normalizeWorkspaceState,remapWorkspaceState,removeWorkspacePaths,restoreWindowState}=require('./session-state.cjs');
 app.setName('Still Notes');
@@ -199,11 +199,18 @@ app.whenReady().then(async()=>{
   win.webContents.on('will-navigate',event=>event.preventDefault());
   win.on('close',e=>{if(!closing){e.preventDefault();win.webContents.send('before-close');}});
   const hasUpdateConfig=await fs.access(path.join(process.resourcesPath,'app-update.yml')).then(()=>true,()=>false);
-  const disabledReason=!app.isPackaged||process.env.STILL_TEST_DATA?'development':process.platform!=='win32'||!hasUpdateConfig?'portable':'';
+  let disabledReason=!app.isPackaged||process.env.STILL_TEST_DATA?'development':process.platform!=='win32'||!hasUpdateConfig?'portable':'';
+  const updater=disabledReason?null:require('electron-updater').autoUpdater;
+  if(updater){
+   try{await verifyUpdateTrust(updater);}catch(error){
+    if(error.code!=='ERR_UPDATER_MISSING_PUBLISHER')throw error;
+    disabledReason='unsigned';
+   }
+  }
   updates=createUpdates({
    currentVersion:app.getVersion(),
    disabledReason,
-   updater:disabledReason?null:require('electron-updater').autoUpdater,
+   updater:disabledReason?null:updater,
    notify:state=>{if(!win.isDestroyed())win.webContents.send('update-state',state);},
    beforeInstall:async()=>{await writes;await persistWindowState();await settingsWrites;closing=true;},
    installFailed:()=>{closing=false;}

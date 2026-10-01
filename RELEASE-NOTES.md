@@ -1,13 +1,15 @@
-# Still Notes 1.6.5
+# Still Notes 1.6.6
 
 ## What's new
 
-- The bottom of the sidebar now displays the installed version number instead of "Check for updates."
-- The version stays visible while updates are checked or downloaded. Hover over it for update status, or click it to check for updates or restart when an update is ready.
-- Keeps the existing background updates and save-before-install behavior.
+- Unsigned installations now use manual updates from startup instead of repeatedly showing the message about a signed build and trusted publisher.
+- Clicking the version number opens GitHub Releases for a manual download. The version number stays visible, and background checks and reconnects remain quiet.
+- Keeps publisher verification for automatic downloads and installation, along with the existing save-before-install behavior in signed builds.
 
 ## Install or upgrade
 
-When the signed installer is available, download **Still-Notes-Setup-1.6.5.exe** and run it. Existing installations upgrade in place, including their shortcuts. Notes, saved repositories, and preferences are preserved using the existing application profile.
+Download **Still-Notes-Setup-1.6.6.exe** below and run it to upgrade. Existing notes, saved folders, preferences, and shortcuts are preserved.
 
-Installer publication requires configured Windows signing credentials. Source code and the version tag can be published before those credentials are available.
+This is a **manual-install release**. The installer is unsigned because Windows signing credentials are not configured; Windows may show an unknown-publisher warning. Automatic updates remain blocked for unsigned builds. Publisher verification has not been disabled.
+
+**SHA256SUMS.txt** contains the installer checksum for download verification.

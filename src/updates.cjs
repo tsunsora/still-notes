@@ -21,9 +21,11 @@ function createUpdates({updater,currentVersion='',disabledReason='',notify=()=>{
  function publish(values){state={...state,...values};notify(snapshot());return snapshot();}
  function failed(error){
   if(state.status==='installing')installFailed();
-  const message=error?.code==='ERR_UPDATER_MISSING_PUBLISHER'
-   ?'Automatic updates require a signed build with a trusted publisher. Install a signed Still Notes release to enable them.'
-   :error?.code==='ERR_UPDATER_INVALID_SIGNATURE'
+  if(error?.code==='ERR_UPDATER_MISSING_PUBLISHER'){
+   disabledReason='unsigned';stop();
+   return publish({status:'disabled',reason:disabledReason,version:'',percent:0,message:'',background:false});
+  }
+  const message=error?.code==='ERR_UPDATER_INVALID_SIGNATURE'
     ?'The update did not pass publisher verification and will not be installed.'
    :error?.code==='ERR_UPDATER_CHANNEL_FILE_NOT_FOUND'
     ?'The latest GitHub release needs its latest.yml update file. Try again after an update-enabled release is published.'
@@ -75,7 +77,7 @@ function createUpdates({updater,currentVersion='',disabledReason='',notify=()=>{
  async function install({relaunch=true}={}){
   if(state.status!=='ready')throw Error('No downloaded update is ready to install.');
   publish({status:'installing',message:''});
-  try{await verifyTrust(updater,{install:true});}catch(error){failed(error);throw Error(state.message);}
+  try{await verifyTrust(updater,{install:true});}catch(error){failed(error);throw Error(state.message||'Automatic installation is unavailable. Update Still Notes manually from GitHub Releases.');}
   try{
    await beforeInstall();
   }catch(error){

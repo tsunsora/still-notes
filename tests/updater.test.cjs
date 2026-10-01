@@ -39,13 +39,20 @@ test('coalesces concurrent checks while publisher trust is being validated',asyn
  const first=service.check(),second=service.check();release('test-credential');
  await Promise.all([first,second]);assert.equal(updater.checks,1);assert.equal(updater.downloads,1);
 });
-test('missing publisher metadata prevents checks and downloads',async()=>{
- const {updater,service}=setup();
+test('missing publisher metadata switches to manual updates without errors or retries',async t=>{
+ t.mock.timers.enable({apis:['setTimeout','Date']});
+ let validations=0;
+ const {updater,service,states}=setup({verifyTrust:async updater=>{validations++;await verifyUpdateTrust(updater);}});
+ t.after(()=>service.stop());
  updater.configOnDisk={value:Promise.resolve({})};
- assert.match((await service.check()).message,/signed build/);
+ service.start();t.mock.timers.tick(10000);await settle();
+ const state=service.snapshot();
+ assert.equal(state.status,'disabled');assert.equal(state.reason,'unsigned');assert.equal(state.message,'');
+ assert(!states.some(state=>state.status==='error'));
  assert.equal(updater.checks,0);assert.equal(updater.downloads,0);
- updater.configOnDisk={value:Promise.resolve({publisherName:'Test publisher'})};
- assert.equal((await service.check()).status,'ready');
+ service.start();service.resume();await service.check();t.mock.timers.tick(24*60*60000);await settle();
+ assert.equal(validations,1);assert.equal(updater.checks,0);assert.equal(updater.downloads,0);
+ await assert.rejects(service.install(),/No downloaded update/);assert.equal(updater.installs,0);
 });
 
 test('rejects missing, empty, and invalid publishers and unverifiable installers',async()=>{
@@ -57,6 +64,14 @@ test('rejects missing, empty, and invalid publishers and unverifiable installers
  updater.verifySignature=async()=> 'Signature is invalid';
  await assert.rejects(service.install(),/publisher verification/);
  assert.equal(updater.installs,0);assert.equal(service.snapshot().status,'error');
+});
+
+test('lost publisher metadata blocks installation and restores normal close behavior',async()=>{
+ let resets=0;const {updater,service}=setup({installFailed:()=>resets++});
+ await service.check();updater.configOnDisk={value:Promise.resolve({})};
+ await assert.rejects(service.install(),/Update Still Notes manually/);
+ assert.equal(service.snapshot().status,'disabled');assert.equal(service.snapshot().reason,'unsigned');
+ assert.equal(updater.installs,0);assert.equal(resets,1);
 });
 
 test('failed checks and downloads can be retried without exposing server or token details',async()=>{
@@ -96,8 +111,8 @@ test('installer launch errors restore normal close behavior',async()=>{
  await service.check();updater.quitAndInstall=()=>updater.emit('error',Error('installer failed'));
  await assert.rejects(service.install(),/Could not update/);assert.equal(resets,1);
 });
-test('development and portable builds never check or download',async()=>{
- for(const disabledReason of ['development','portable']){
+test('development, portable and unsigned builds never check or download',async()=>{
+ for(const disabledReason of ['development','portable','unsigned']){
   const service=createUpdates({disabledReason,updater:null,verifyTrust:()=>{throw Error('must not verify disabled builds');}});
   service.start();assert.equal((await service.check()).status,'disabled');
   await assert.rejects(service.install(),/No downloaded update/);service.stop();

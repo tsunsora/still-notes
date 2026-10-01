@@ -23,7 +23,7 @@ A quiet space for Markdown notes on **Windows**. Your notebook is a folder of or
 2. Run it, choose an installation location, and launch **Still Notes**.
 3. Start in the automatically created **Documents/Still Notes** notebook, or use the folder button at the bottom of the sidebar to open an existing folder.
 
-Installer builds from 1.6.4 require Windows code signing; earlier releases were unsigned. The installer adds Start menu and desktop shortcuts. Notes remain separate from the application, and uninstalling retains your notes and app settings.
+The installer adds Start menu and desktop shortcuts. Notes remain separate from the application, and uninstalling retains your notes and app settings. The release page identifies unsigned installers; these use manual updates. Automatic updates require a signed build.
 
 You can also build a portable copy using the [development instructions](#development). Run `Still Notes.exe` from the resulting `Still Notes-win32-x64` folder and keep its companion files beside it.
 
@@ -85,9 +85,9 @@ Public installers are available from [GitHub Releases](https://github.com/tsunso
 
 Version 1.6.4 uses the public `tsunsora/still-notes` feed without GitHub authentication. Versions through 1.6.2 used the older authenticated feed; manually install a signed release if that updater cannot retrieve it.
 
-Automatic updates require a trusted publisher in the installed build's update configuration. The downloaded installer must pass Windows publisher verification, which is repeated before installation. Builds without publisher metadata refuse automatic downloads and installation.
+Automatic updates require a trusted publisher in the installed build's update configuration. The downloaded installer must pass Windows publisher verification, which is repeated before installation. Builds without publisher metadata use manual updates from startup, without repeated warnings or background retries. Clicking the version number opens GitHub Releases to download a newer installer.
 
-The installed app checks after launch and every four hours, downloads newer stable versions in the background, and applies a ready update silently when you close it. The bottom of the sidebar displays the installed version number. Hover over it for update status; click it to check for updates or restart when an update is ready. Both installation paths save pending notes and preferences first; a failed save keeps your edits open. Failed checks retry with increasing delays.
+Signed installations check after launch and every four hours, download newer stable versions in the background, and apply a ready update silently when you close the app. The bottom of the sidebar displays the installed version number. Hover over it for update status; click it to check for updates or restart when an update is ready. Both installation paths save pending notes and preferences first; a failed save keeps your edits open. Failed network checks retry with increasing delays.
 
 Portable builds link to the installer. Development and automated test runs do not contact GitHub unless the optional live-feed check is explicitly run.
 
@@ -122,6 +122,7 @@ Run these on Windows with dependencies installed. Set `STILL_EXE` to a packaged 
 | `node tests/folders.cjs` | Folder animation, icons, and reduced motion |
 | `node tests/identity.cjs` | Reuse of the existing Still profile |
 | `node tests/update-close.cjs` | Save handshakes before close/restart, using a simulated installer |
+| `node tests/manual-updates.cjs` | Unsigned installed-build startup, quiet manual updates, and the GitHub Releases link |
 | `node tests/github-feed.cjs` | Optional public-feed metadata check; requires `STILL_EXE` pointing to a signed installer-built executable |
 
 The live-feed check never downloads or installs an update.
@@ -131,9 +132,11 @@ The live-feed check never downloads or installs an update.
 1. Update the version in `package.json` and `package-lock.json`, and edit [RELEASE-NOTES.md](RELEASE-NOTES.md).
 2. Configure `WIN_CSC_LINK` (a certificate path or base64 PFX) and `WIN_CSC_KEY_PASSWORD` repository secrets for a trusted Windows code-signing certificate. Local builds use the same environment variables. Do not commit the certificate or its password.
 3. Push a matching `vVERSION` tag. The [Windows release workflow](.github/workflows/release.yml) checks the version, runs unit and integration tests, builds the signed installer, verifies both executable signatures and publisher metadata, and publishes a complete release through a draft. Missing signing credentials or invalid signatures stop publication.
-4. For manual releases, run `npm run installer` with signing credentials and upload **all three** files together: `Still-Notes-Setup-VERSION.exe`, its `.exe.blockmap`, and `latest.yml`. Publish a stable release tagged `vVERSION`.
+4. For signed releases published manually, run `npm run installer` with signing credentials and upload **all three** files together: `Still-Notes-Setup-VERSION.exe`, its `.exe.blockmap`, and `latest.yml`. Publish a stable release tagged `vVERSION`.
 
-The update feed needs `latest.yml`, its installer checksum, and publisher metadata embedded in the installed app. The installer build has `forceCodeSigning` enabled and cannot succeed unsigned. Local builds do not publish automatically. Portable development builds can be created without signing and do not enable automatic updates.
+The update feed needs `latest.yml`, its installer checksum, and publisher metadata embedded in the installed app. Default installer builds enforce `forceCodeSigning`. Local builds do not publish automatically. Portable development builds can be created without signing and do not enable automatic updates.
+
+For an unsigned manual-install release, explicitly build with `npm run installer -- --config.forceCodeSigning=false`, verify the packaged app, and publish the installer with a SHA-256 checksum file. Identify the installer as unsigned in the release notes and omit `latest.yml` and `.exe.blockmap`; unsigned releases must not enter the automatic update feed. Publisher verification remains enabled, and the app uses the GitHub Releases link for manual updates.
 
 ## Credits
 

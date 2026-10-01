@@ -224,13 +224,13 @@ function renderUpdate(next){
  button.hidden=!currentVersion;
  button.disabled=['checking','downloading','installing'].includes(next.status)||installingUpdate||(next.status==='disabled'&&next.reason==='development');
  button.classList.toggle('update-ready',next.status==='ready');
- const labels={idle:'Check for updates',checking:'Checking for updates…',current:'Up to date · Check again',downloading:`Downloading update · ${next.percent}%`,ready:'Restart to update',installing:'Installing update…',error:'Retry update check',disabled:'Install for auto-updates'};
+ const labels={idle:'Check for updates',checking:'Checking for updates…',current:'Up to date · Check again',downloading:`Downloading update · ${next.percent}%`,ready:'Restart to update',installing:'Installing update…',error:'Retry update check',disabled:'Open releases on GitHub'};
  if(next.background&&next.status==='error')labels.error='Check for updates';
  if(next.status==='disabled'&&next.reason==='development')labels.disabled='Development build';
  const versionLabel=`v${currentVersion}`,action=labels[next.status]||labels.idle;
  $('#update-label').textContent=versionLabel;
  button.setAttribute('aria-label',`Still Notes ${versionLabel} · ${action}`);
- button.title=next.message||(next.status==='ready'?`Still Notes ${next.version} is ready. Restart now, or keep writing and it will install silently when you close.`:next.status==='disabled'&&next.reason!=='development'?'Open the latest Still Notes installer on GitHub':action);
+ button.title=next.message||(next.status==='ready'?`Still Notes ${next.version} is ready. Restart now, or keep writing and it will install silently when you close.`:next.status==='disabled'&&next.reason!=='development'?'Updates are installed manually. Open the latest Still Notes release on GitHub.':action);
 }
 window.stillEvents.updateState(renderUpdate);
 $('#app-update').onclick=attempt(async()=>{
@@ -239,7 +239,7 @@ $('#app-update').onclick=attempt(async()=>{
   installingUpdate=true;document.body.inert=true;renderUpdate(updateState);
   try{await flush();await persistSession();await api('install-update');}
   finally{installingUpdate=false;document.body.inert=false;renderUpdate(updateState);}
- }else{const next=await api('check-updates');renderUpdate(next);if(next.status==='error')toast(next.message);}
+ }else{const next=await api('check-updates');renderUpdate(next);if(next.status==='disabled'&&next.reason==='unsigned')await api('external','https://github.com/tsunsora/still-notes/releases/latest');else if(next.status==='error')toast(next.message);}
 });
 attempt(async()=>renderUpdate(await api('update-state')))();
 window.addEventListener('online',()=>{api('resume-updates').catch(()=>{});});
