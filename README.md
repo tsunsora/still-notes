@@ -87,7 +87,7 @@ Version 1.6.4 uses the public `tsunsora/still-notes` feed without GitHub authent
 
 Automatic updates require a trusted publisher in the installed build's update configuration. The downloaded installer must pass Windows publisher verification, which is repeated before installation. Builds without publisher metadata refuse automatic downloads and installation.
 
-The installed app checks after launch and every four hours, downloads newer stable versions in the background, and applies a ready update silently when you close it. **Restart to update** applies it immediately and restores your session. Both paths save pending notes and preferences first; a failed save keeps your edits open. Failed checks retry with increasing delays, and **Check for updates** offers a manual retry.
+The installed app checks after launch and every four hours, downloads newer stable versions in the background, and applies a ready update silently when you close it. The bottom of the sidebar displays the installed version number. Hover over it for update status; click it to check for updates or restart when an update is ready. Both installation paths save pending notes and preferences first; a failed save keeps your edits open. Failed checks retry with increasing delays.
 
 Portable builds link to the installer. Development and automated test runs do not contact GitHub unless the optional live-feed check is explicitly run.
 

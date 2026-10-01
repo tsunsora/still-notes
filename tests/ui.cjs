@@ -12,6 +12,9 @@ const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:
   await page.waitForFunction(()=>document.querySelector('#note-title').value==='Test');
   assert.equal(await page.title(),'Still Notes');assert.equal(await page.locator('.brand strong').textContent(),'Still Notes');
   assert.equal(await app.evaluate(({app})=>app.getName()),'Still Notes');
+  const versionLabel='v'+await app.evaluate(({app})=>app.getVersion());
+  await page.locator('#app-update').waitFor();
+  assert.equal(await page.locator('#update-label').textContent(),versionLabel);
   assert.equal(await page.locator('#new-note, #new-folder, .side-actions').count(),0);
   await page.keyboard.press('Control+Shift+N');await page.locator('#modal-input').fill('Shortcut folder');await page.locator('#modal-submit').click();await page.locator('#modal').waitFor({state:'hidden'});
   await page.keyboard.press('Control+n');await page.locator('#modal-input').fill('Shortcut note');await page.locator('#modal-submit').click();
@@ -23,13 +26,15 @@ const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:
   assert.equal(await fs.readFile(path.join(root,'Shortcut folder','Context note.md'),'utf8'),'');
    // Exercise update status messages and save-before-install through the real IPC boundary.
    await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].webContents.send('update-state',{status:'error',background:true,message:'Will retry automatically'}));
-   await page.getByRole('button',{name:'Check for updates',exact:true}).waitFor();
+   await page.getByRole('button',{name:`Still Notes ${versionLabel} · Check for updates`,exact:true}).waitFor();
+   assert.equal(await page.locator('#update-label').textContent(),versionLabel);
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].webContents.send('update-state',{status:'downloading',percent:37,version:'1.6.0'}));
-  await page.getByRole('button',{name:'Downloading update · 37%'}).waitFor();assert.equal(await page.locator('#app-update').isDisabled(),true);
+  await page.getByRole('button',{name:`Still Notes ${versionLabel} · Downloading update · 37%`,exact:true}).waitFor();assert.equal(await page.locator('#app-update').isDisabled(),true);
+  assert.equal(await page.locator('#update-label').textContent(),versionLabel);
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].webContents.send('update-state',{status:'ready',percent:100,version:'1.6.0'}));
-   await page.getByRole('button',{name:'Restart to update'}).waitFor();
-   assert.equal(await page.locator('#update-detail').textContent(),'Or it will install when you close');
-   assert.equal(await page.locator('#update-detail').isVisible(),true);
+   await page.getByRole('button',{name:`Still Notes ${versionLabel} · Restart to update`,exact:true}).waitFor();
+   assert.equal(await page.locator('#update-label').textContent(),versionLabel);
+   assert.match(await page.locator('#app-update').getAttribute('title'),/1\.6\.0 is ready/);
   await page.locator('#editor').fill('Saved before update');await page.locator('#app-update').click();
   // Test builds reject installation, so this also verifies UI recovery after failure.
   await page.getByRole('alert').filter({hasText:'No downloaded update'}).waitFor();
@@ -49,6 +54,6 @@ const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
   await page.locator('#editor').fill('Saved before close');await page.locator('#close').click();await app.waitForEvent('close');
   assert.equal(await fs.readFile(path.join(root,'Shortcut folder','Context note.md'),'utf8'),'Saved before close');assert.deepEqual(errors,[]);
-  console.log('PASS: removed controls, keyboard/context creation, update progress, save-before-install, install failure recovery, minimum layout, save-before-close.');
+  console.log('PASS: installed version label, keyboard/context creation, update progress, save-before-install, install failure recovery, minimum layout, save-before-close.');
  }finally{await app.close().catch(()=>{});await fs.rm(temp,{recursive:true,force:true});}
 })().catch(error=>{console.error(error);process.exitCode=1;});

@@ -201,6 +201,7 @@ app.whenReady().then(async()=>{
   const hasUpdateConfig=await fs.access(path.join(process.resourcesPath,'app-update.yml')).then(()=>true,()=>false);
   const disabledReason=!app.isPackaged||process.env.STILL_TEST_DATA?'development':process.platform!=='win32'||!hasUpdateConfig?'portable':'';
   updates=createUpdates({
+   currentVersion:app.getVersion(),
    disabledReason,
    updater:disabledReason?null:require('electron-updater').autoUpdater,
    notify:state=>{if(!win.isDestroyed())win.webContents.send('update-state',state);},

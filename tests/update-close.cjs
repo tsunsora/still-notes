@@ -35,8 +35,10 @@ if(process.versions.electron){
     try{
      const page=await app.firstWindow();
      await page.waitForFunction(()=>document.querySelector('#note-title').value==='Test');
-     await page.getByRole('button',{name:'Check for updates',exact:true}).click();
-     await page.getByRole('button',{name:'Restart to update',exact:true}).waitFor();
+     const versionLabel='v'+await app.evaluate(({app})=>app.getVersion());
+     await page.getByRole('button',{name:`Still Notes ${versionLabel} · Check for updates`,exact:true}).click();
+     await page.getByRole('button',{name:`Still Notes ${versionLabel} · Restart to update`,exact:true}).waitFor();
+     assert.equal(await page.locator('#update-label').textContent(),versionLabel);
      // Restart/close directly from the input event, before the autosave timer fires.
      const closed=app.waitForEvent('close');
      await page.evaluate(relaunch=>{

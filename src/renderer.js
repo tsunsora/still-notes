@@ -217,20 +217,20 @@ function updateWindowControls(state){const maximized=state.maximized;const butto
 window.stillEvents.windowState(updateWindowControls);
 attempt(async()=>updateWindowControls(await api('window-state')))();
 
-let updateState={status:'idle'},installingUpdate=false;
+let updateState={status:'idle'},installingUpdate=false,currentVersion='';
 function renderUpdate(next){
  updateState=next;const button=$('#app-update');
- button.hidden=next.status==='disabled'&&next.reason==='development';
- button.disabled=['checking','downloading','installing'].includes(next.status)||installingUpdate;
+ if(next.currentVersion)currentVersion=next.currentVersion;
+ button.hidden=!currentVersion;
+ button.disabled=['checking','downloading','installing'].includes(next.status)||installingUpdate||(next.status==='disabled'&&next.reason==='development');
  button.classList.toggle('update-ready',next.status==='ready');
  const labels={idle:'Check for updates',checking:'Checking for updates…',current:'Up to date · Check again',downloading:`Downloading update · ${next.percent}%`,ready:'Restart to update',installing:'Installing update…',error:'Retry update check',disabled:'Install for auto-updates'};
  if(next.background&&next.status==='error')labels.error='Check for updates';
- $('#update-label').textContent=labels[next.status]||labels.idle;
- let detail=$('#update-detail');
- if(!detail){detail=document.createElement('span');detail.id='update-detail';button.append(detail);}
- detail.hidden=next.status!=='ready';detail.textContent='Or it will install when you close';
- button.setAttribute('aria-label',labels[next.status]||labels.idle);
- button.title=next.message||(next.status==='ready'?`Still Notes ${next.version} is ready. Restart now, or keep writing and it will install silently when you close.`:next.status==='disabled'?'Open the latest Still Notes installer on GitHub':'Updates download automatically in the background');
+ if(next.status==='disabled'&&next.reason==='development')labels.disabled='Development build';
+ const versionLabel=`v${currentVersion}`,action=labels[next.status]||labels.idle;
+ $('#update-label').textContent=versionLabel;
+ button.setAttribute('aria-label',`Still Notes ${versionLabel} · ${action}`);
+ button.title=next.message||(next.status==='ready'?`Still Notes ${next.version} is ready. Restart now, or keep writing and it will install silently when you close.`:next.status==='disabled'&&next.reason!=='development'?'Open the latest Still Notes installer on GitHub':action);
 }
 window.stillEvents.updateState(renderUpdate);
 $('#app-update').onclick=attempt(async()=>{

@@ -14,8 +14,8 @@ async function verifyUpdateTrust(updater,{install=false}={}){
  }
 }
 
-function createUpdates({updater,disabledReason='',notify=()=>{},verifyTrust=verifyUpdateTrust,beforeInstall=async()=>{},installFailed=()=>{}}){
- let state={status:disabledReason?'disabled':'idle',reason:disabledReason,version:'',percent:0,message:'',background:false};
+function createUpdates({updater,currentVersion='',disabledReason='',notify=()=>{},verifyTrust=verifyUpdateTrust,beforeInstall=async()=>{},installFailed=()=>{}}){
+ let state={status:disabledReason?'disabled':'idle',reason:disabledReason,currentVersion,version:'',percent:0,message:'',background:false};
  let pending=null,timer,running=false,failures=0,lastCheck=0;
  const snapshot=()=>({...state});
  function publish(values){state={...state,...values};notify(snapshot());return snapshot();}
