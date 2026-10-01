@@ -1,5 +1,5 @@
 // Optional live smoke check: STILL_EXE must point to an installer-built executable.
-// Checks the public feed and installed publisher metadata; never downloads/installs.
+// Verifies the public feed and release signature; optional download check never installs.
 const {_electron:electron}=require('playwright');
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict');
 (async()=>{
@@ -13,11 +13,26 @@ const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:
    const load=process.getBuiltinModule('module').createRequire(app.getAppPath()+'/package.json');
    const {autoUpdater}=load('electron-updater');
    const {createUpdates}=load('./src/updates.cjs');
-   autoUpdater.downloadUpdate=async()=>{};
-   return createUpdates({updater:autoUpdater}).check();
+   const {verifyReleaseTrust,verifyDownloadedRelease}=load('./src/update-trust.cjs');
+   const download=process.env.STILL_FEED_DOWNLOAD_TEST==='1';
+   if(download){
+    const {DownloadedUpdateHelper}=load('electron-updater/out/DownloadedUpdateHelper');
+    autoUpdater.downloadedUpdateHelper=new DownloadedUpdateHelper(app.getPath('userData')+'/update-test-cache');
+    autoUpdater.currentVersion=new (load('semver').SemVer)('1.6.6');
+   }else autoUpdater.downloadUpdate=async()=>{};
+   const service=createUpdates({updater:autoUpdater});
+   try{
+    const state=await service.check();
+    if(state.status==='error')throw Error(state.message);
+    const info=autoUpdater.updateInfoAndProvider.info,release=await verifyReleaseTrust(info);
+    if(download){
+     if(state.status!=='ready')throw Error('The real installer was not downloaded.');
+     await verifyDownloadedRelease(autoUpdater.installerPath,release);
+    }
+    return {status:state.status,version:release.version,downloadVerified:download};
+   }finally{service.stop();}
   });
-  if(result.status==='error')assert.match(result.message,/latest.yml/,'The signed public GitHub update feed could not be reached.');
-  else assert(['current','downloading'].includes(result.status));
-  console.log(result.status==='error'?'PASS: signed public GitHub access; current release is awaiting latest.yml.':'PASS: public GitHub update metadata is readable and publisher metadata is configured (download and install disabled).');
+  assert(['current','downloading','ready'].includes(result.status));
+  console.log(`PASS: live GitHub release ${result.version}, pinned release signature${result.downloadVerified?' and real automatic installer download/checksum':''}; installation disabled.`);
  }finally{await app.close().catch(()=>{});await fs.rm(temp,{recursive:true,force:true});}
 })().catch(error=>{console.error(error);process.exitCode=1;});

@@ -2,14 +2,18 @@
 if(process.versions.electron){
  const {app}=require('electron'),{EventEmitter}=require('node:events');
  const fs=require('node:fs'),path=require('node:path');
+ const crypto=require('node:crypto');
  const updates=require('../src/updates.cjs'),createUpdates=updates.createUpdates;
+ const {UPDATE_FEED,releaseDetails,signingPayload,verifyReleaseSignature}=require('../src/update-trust.cjs');
+ const keys=crypto.generateKeyPairSync('ed25519'),contents=Buffer.from('Simulated installer - never executed');
+ const info={version:'99.0.0',files:[{url:'Still-Notes-Setup-99.0.0.exe',sha512:crypto.createHash('sha512').update(contents).digest('base64')}]};
  class Updater extends EventEmitter{
-  configOnDisk={value:Promise.resolve({publisherName:'Test publisher'})};
-  installerPath='simulated-installer.exe';
+  configOnDisk={value:Promise.resolve({...UPDATE_FEED,...(process.env.STILL_UPDATE_TEST_SIGNED?{publisherName:'Test publisher'}:{})})};
+  installerPath=path.join(process.env.STILL_TEST_DATA,'Still-Notes-Setup-99.0.0.exe');
   async verifySignature(){return null;}
   setFeedURL(){}
-  async checkForUpdates(){return {isUpdateAvailable:true,updateInfo:{version:'99.0.0'}};}
-  async downloadUpdate(){this.emit('update-downloaded',{version:'99.0.0'});}
+  async checkForUpdates(){return {isUpdateAvailable:true,updateInfo:info};}
+  async downloadUpdate(){fs.writeFileSync(this.installerPath,contents);this.emit('update-downloaded',{version:'99.0.0'});}
   quitAndInstall(silent,relaunch){
    const profile=process.env.STILL_TEST_DATA;
    const settings=JSON.parse(fs.readFileSync(path.join(profile,'settings.json'),'utf8'));
@@ -17,7 +21,10 @@ if(process.versions.electron){
    setImmediate(()=>app.quit());
   }
  }
- updates.createUpdates=options=>createUpdates({...options,disabledReason:'',updater:new Updater()});
+ updates.createUpdates=options=>createUpdates({...options,disabledReason:'',updater:new Updater(),verifyRelease:async info=>{
+  const details=releaseDetails(info),document={schema:1,...details,signature:crypto.sign(null,signingPayload(details),keys.privateKey).toString('base64')};
+  return verifyReleaseSignature(info,document,keys.publicKey);
+ }});
  require('../src/main.cjs');
 }else{
  const {_electron:electron}=require('playwright');
@@ -25,12 +32,12 @@ if(process.versions.electron){
  (async()=>{
   const temp=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'still-update-close-')));
   try{
-   for(const relaunch of [false,true]){
-    const profile=path.join(temp,relaunch?'restart':'close'),root=path.join(profile,'Notes');
+   for(const signed of [false,true])for(const relaunch of [false,true]){
+    const profile=path.join(temp,(signed?'signed-':'unsigned-')+(relaunch?'restart':'close')),root=path.join(profile,'Notes');
     await fs.mkdir(root,{recursive:true});
     await fs.writeFile(path.join(root,'Test.md'),'Original note');
     await fs.writeFile(path.join(profile,'settings.json'),JSON.stringify({root,last:'Test.md'}));
-    const env={...process.env,STILL_TEST_DATA:profile};delete env.ELECTRON_RUN_AS_NODE;
+    const env={...process.env,STILL_TEST_DATA:profile,STILL_UPDATE_TEST_SIGNED:signed?'1':''};delete env.ELECTRON_RUN_AS_NODE;
     const app=await electron.launch({args:[__filename],env});
     try{
      const page=await app.firstWindow();
@@ -57,7 +64,7 @@ if(process.versions.electron){
      assert(installed.settings.window.bounds.width>0);
     }finally{await app.close().catch(()=>{});}
    }
-   console.log('PASS: real close/restart handshake saves notes, selection, session and window state before silent installation; normal close does not relaunch.');
+   console.log('PASS: signed and unsigned builds verify signed update metadata and cached checksums, save notes/session/window state before silent close/restart installation, and do not relaunch on normal close.');
   }finally{await fs.rm(temp,{recursive:true,force:true});}
  })().catch(error=>{console.error(error);process.exitCode=1;});
 }

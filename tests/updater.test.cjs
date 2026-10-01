@@ -2,10 +2,11 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {EventEmitter}=require('node:events');
 const {createUpdates,verifyUpdateTrust}=require('../src/updates.cjs');
+const {UPDATE_FEED}=require('../src/update-trust.cjs');
 
 class Updater extends EventEmitter{
  checks=0;downloads=0;installs=0;available=true;
- configOnDisk={value:Promise.resolve({publisherName:'Test publisher'})};
+ configOnDisk={value:Promise.resolve({...UPDATE_FEED,publisherName:'Test publisher'})};
  installerPath='simulated-installer.exe';
  async verifySignature(){return null;}
  setFeedURL(feed){this.feed=feed;}
@@ -15,7 +16,7 @@ class Updater extends EventEmitter{
 }
 function setup(options={}){
  const updater=new Updater(),states=[];
- const service=createUpdates({updater,notify:state=>states.push(state),...options});
+ const service=createUpdates({updater,notify:state=>states.push(state),verifyRelease:async info=>({version:info.version}),verifyDownload:async()=>{},...options});
  return {updater,service,states};
 }
 test('downloads only stable newer updates, exposes progress, and keeps credentials out of UI state',async()=>{
@@ -39,38 +40,39 @@ test('coalesces concurrent checks while publisher trust is being validated',asyn
  const first=service.check(),second=service.check();release('test-credential');
  await Promise.all([first,second]);assert.equal(updater.checks,1);assert.equal(updater.downloads,1);
 });
-test('missing publisher metadata switches to manual updates without errors or retries',async t=>{
+test('unsigned builds automatically check, verify the release and download without warnings',async t=>{
  t.mock.timers.enable({apis:['setTimeout','Date']});
  let validations=0;
- const {updater,service,states}=setup({verifyTrust:async updater=>{validations++;await verifyUpdateTrust(updater);}});
+ let releases=0,downloads=0;
+ const {updater,service,states}=setup({verifyTrust:async updater=>{validations++;await verifyUpdateTrust(updater);},verifyRelease:async info=>{releases++;return {version:info.version};},verifyDownload:async()=>downloads++});
  t.after(()=>service.stop());
- updater.configOnDisk={value:Promise.resolve({})};
+ updater.configOnDisk={value:Promise.resolve({...UPDATE_FEED})};
  service.start();t.mock.timers.tick(10000);await settle();
  const state=service.snapshot();
- assert.equal(state.status,'disabled');assert.equal(state.reason,'unsigned');assert.equal(state.message,'');
+ assert.equal(state.status,'ready');assert.equal(state.reason,'');assert.equal(state.message,'');
  assert(!states.some(state=>state.status==='error'));
- assert.equal(updater.checks,0);assert.equal(updater.downloads,0);
+ assert.equal(updater.checks,1);assert.equal(updater.downloads,1);assert.equal(releases,1);
  service.start();service.resume();await service.check();t.mock.timers.tick(24*60*60000);await settle();
- assert.equal(validations,1);assert.equal(updater.checks,0);assert.equal(updater.downloads,0);
- await assert.rejects(service.install(),/No downloaded update/);assert.equal(updater.installs,0);
+ assert.equal(validations,1);assert.equal(updater.checks,1);assert.equal(updater.downloads,1);
+ await service.install();assert.equal(updater.installs,1);assert.equal(downloads,1);
 });
 
 test('rejects missing, empty, and invalid publishers and unverifiable installers',async()=>{
- for(const publisherName of [undefined,'',[],[''],[null]]){
-  await assert.rejects(verifyUpdateTrust({configOnDisk:{value:Promise.resolve({publisherName})}}),{code:'ERR_UPDATER_MISSING_PUBLISHER'});
+ for(const publisherName of ['',[],[''],[null]]){
+  await assert.rejects(verifyUpdateTrust({configOnDisk:{value:Promise.resolve({...UPDATE_FEED,publisherName})}}),{code:'ERR_UPDATER_INVALID_SIGNATURE'});
  }
- await assert.rejects(verifyUpdateTrust({configOnDisk:{value:Promise.reject(Error('missing'))}}),{code:'ERR_UPDATER_MISSING_PUBLISHER'});
+ await assert.rejects(verifyUpdateTrust({configOnDisk:{value:Promise.reject(Error('missing'))}}),{code:'ERR_UPDATER_UNTRUSTED_FEED'});
  const {updater,service}=setup();await service.check();
  updater.verifySignature=async()=> 'Signature is invalid';
  await assert.rejects(service.install(),/publisher verification/);
  assert.equal(updater.installs,0);assert.equal(service.snapshot().status,'error');
 });
 
-test('lost publisher metadata blocks installation and restores normal close behavior',async()=>{
+test('changed update repositories block installation and restore normal close behavior',async()=>{
  let resets=0;const {updater,service}=setup({installFailed:()=>resets++});
  await service.check();updater.configOnDisk={value:Promise.resolve({})};
- await assert.rejects(service.install(),/Update Still Notes manually/);
- assert.equal(service.snapshot().status,'disabled');assert.equal(service.snapshot().reason,'unsigned');
+ await assert.rejects(service.install(),/Could not update/);
+ assert.equal(service.snapshot().status,'error');
  assert.equal(updater.installs,0);assert.equal(resets,1);
 });
 
@@ -111,12 +113,20 @@ test('installer launch errors restore normal close behavior',async()=>{
  await service.check();updater.quitAndInstall=()=>updater.emit('error',Error('installer failed'));
  await assert.rejects(service.install(),/Could not update/);assert.equal(resets,1);
 });
-test('development, portable and unsigned builds never check or download',async()=>{
- for(const disabledReason of ['development','portable','unsigned']){
+test('development and portable builds never check or download',async()=>{
+ for(const disabledReason of ['development','portable']){
   const service=createUpdates({disabledReason,updater:null,verifyTrust:()=>{throw Error('must not verify disabled builds');}});
   service.start();assert.equal((await service.check()).status,'disabled');
   await assert.rejects(service.install(),/No downloaded update/);service.stop();
  }
+});
+test('unsigned or invalid release metadata prevents downloads, and changed installers cannot launch',async()=>{
+ const invalid=()=>Object.assign(Error('invalid release'),{code:'ERR_UPDATER_INVALID_RELEASE_SIGNATURE'});
+ const rejected=setup({verifyRelease:async()=>{throw invalid();}});
+ assert.equal((await rejected.service.check()).status,'error');assert.equal(rejected.updater.downloads,0);
+ const changed=setup({verifyDownload:async()=>{throw Object.assign(Error('changed installer'),{code:'ERR_UPDATER_CHECKSUM_MISMATCH'});}});
+ await changed.service.check();await assert.rejects(changed.service.install(),/release verification/);
+ assert.equal(changed.updater.installs,0);
 });
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 test('automatic failures retry with capped backoff and return to normal polling after recovery',async t=>{

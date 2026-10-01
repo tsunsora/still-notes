@@ -239,7 +239,7 @@ $('#app-update').onclick=attempt(async()=>{
   installingUpdate=true;document.body.inert=true;renderUpdate(updateState);
   try{await flush();await persistSession();await api('install-update');}
   finally{installingUpdate=false;document.body.inert=false;renderUpdate(updateState);}
- }else{const next=await api('check-updates');renderUpdate(next);if(next.status==='disabled'&&next.reason==='unsigned')await api('external','https://github.com/tsunsora/still-notes/releases/latest');else if(next.status==='error')toast(next.message);}
+ }else{const next=await api('check-updates');renderUpdate(next);if(next.status==='error')toast(next.message);}
 });
 attempt(async()=>renderUpdate(await api('update-state')))();
 window.addEventListener('online',()=>{api('resume-updates').catch(()=>{});});

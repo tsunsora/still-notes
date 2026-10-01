@@ -1,31 +1,33 @@
 const POLL_INTERVAL=4*60*60*1000,RETRY_INTERVAL=60*1000,MAX_RETRY_INTERVAL=60*60*1000;
+const {UPDATE_FEED,verifyReleaseTrust,verifyDownloadedRelease}=require('./update-trust.cjs');
 
 async function verifyUpdateTrust(updater,{install=false}={}){
  let config;
  try{config=await updater.configOnDisk.value;}catch{}
- const publishers=Array.isArray(config?.publisherName)?config.publisherName:[config?.publisherName];
- if(!publishers.length||publishers.some(name=>typeof name!=='string'||!name.trim())){
-  throw Object.assign(Error('This build has no trusted update publisher.'),{code:'ERR_UPDATER_MISSING_PUBLISHER'});
+ if(config?.provider!==UPDATE_FEED.provider||config.owner!==UPDATE_FEED.owner||config.repo!==UPDATE_FEED.repo||config.private===true||(config.host&&config.host!=='github.com')||(config.protocol&&config.protocol!=='https')){
+  throw Object.assign(Error('The update configuration does not match the Still Notes release repository.'),{code:'ERR_UPDATER_UNTRUSTED_FEED'});
  }
- if(install){
+ const publishers=config.publisherName==null?[]:Array.isArray(config.publisherName)?config.publisherName:[config.publisherName];
+ if(config.publisherName!=null&&(!publishers.length||publishers.some(name=>typeof name!=='string'||!name.trim()))){
+  throw Object.assign(Error('The configured update publisher is invalid.'),{code:'ERR_UPDATER_INVALID_SIGNATURE'});
+ }
+ if(install&&publishers.length){
   if(!updater.installerPath||typeof updater.verifySignature!=='function'||await updater.verifySignature(updater.installerPath)!==null){
    throw Object.assign(Error('The downloaded installer did not pass publisher verification.'),{code:'ERR_UPDATER_INVALID_SIGNATURE'});
   }
  }
 }
 
-function createUpdates({updater,currentVersion='',disabledReason='',notify=()=>{},verifyTrust=verifyUpdateTrust,beforeInstall=async()=>{},installFailed=()=>{}}){
+function createUpdates({updater,currentVersion='',disabledReason='',notify=()=>{},verifyTrust=verifyUpdateTrust,verifyRelease=verifyReleaseTrust,verifyDownload=verifyDownloadedRelease,beforeInstall=async()=>{},installFailed=()=>{}}){
  let state={status:disabledReason?'disabled':'idle',reason:disabledReason,currentVersion,version:'',percent:0,message:'',background:false};
- let pending=null,timer,running=false,failures=0,lastCheck=0;
+ let pending=null,timer,running=false,failures=0,lastCheck=0,trustedRelease=null;
  const snapshot=()=>({...state});
  function publish(values){state={...state,...values};notify(snapshot());return snapshot();}
  function failed(error){
   if(state.status==='installing')installFailed();
-  if(error?.code==='ERR_UPDATER_MISSING_PUBLISHER'){
-   disabledReason='unsigned';stop();
-   return publish({status:'disabled',reason:disabledReason,version:'',percent:0,message:'',background:false});
-  }
-  const message=error?.code==='ERR_UPDATER_INVALID_SIGNATURE'
+  const message=['ERR_UPDATER_INVALID_RELEASE_SIGNATURE','ERR_UPDATER_CHECKSUM_MISMATCH'].includes(error?.code)
+   ?'The update did not pass release verification and will not be installed.'
+   :error?.code==='ERR_UPDATER_INVALID_SIGNATURE'
     ?'The update did not pass publisher verification and will not be installed.'
    :error?.code==='ERR_UPDATER_CHANNEL_FILE_NOT_FOUND'
     ?'The latest GitHub release needs its latest.yml update file. Try again after an update-enabled release is published.'
@@ -43,7 +45,11 @@ function createUpdates({updater,currentVersion='',disabledReason='',notify=()=>{
   updater.on('download-progress',progress=>{
    if(state.status==='downloading')publish({percent:Math.max(0,Math.min(100,Math.floor(progress.percent||0)))});
   });
-  updater.on('update-downloaded',info=>publish({status:'ready',version:info.version,percent:100,message:''}));
+  updater.on('update-downloaded',info=>{
+   if(state.status!=='downloading')return;
+   if(info.version!==trustedRelease?.version){failed(Object.assign(Error('Unexpected update version.'),{code:'ERR_UPDATER_INVALID_RELEASE_SIGNATURE'}));return;}
+   publish({status:'ready',version:info.version,percent:100,message:''});
+  });
  }
  function schedule(delay){
   clearTimeout(timer);timer=null;
@@ -58,10 +64,11 @@ function createUpdates({updater,currentVersion='',disabledReason='',notify=()=>{
   pending=(async()=>{
    try{
     await verifyTrust(updater);
-    updater.setFeedURL({provider:'github',owner:'tsunsora',repo:'still-notes',private:false});
+    updater.setFeedURL(UPDATE_FEED);
     const result=await updater.checkForUpdates();
     if(!result)throw Error('Update check did not complete.');
     if(!result.isUpdateAvailable)return publish({status:'current',message:''});
+    trustedRelease=await verifyRelease(result.updateInfo);
     publish({status:'downloading',version:result.updateInfo.version,percent:0});
     // electron-updater verifies the downloaded installer against latest.yml.
     await updater.downloadUpdate();
@@ -77,7 +84,7 @@ function createUpdates({updater,currentVersion='',disabledReason='',notify=()=>{
  async function install({relaunch=true}={}){
   if(state.status!=='ready')throw Error('No downloaded update is ready to install.');
   publish({status:'installing',message:''});
-  try{await verifyTrust(updater,{install:true});}catch(error){failed(error);throw Error(state.message||'Automatic installation is unavailable. Update Still Notes manually from GitHub Releases.');}
+  try{await verifyTrust(updater,{install:true});await verifyDownload(updater.installerPath,trustedRelease);}catch(error){failed(error);throw Error(state.message);}
   try{
    await beforeInstall();
   }catch(error){

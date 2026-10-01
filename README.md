@@ -23,7 +23,7 @@ A quiet space for Markdown notes on **Windows**. Your notebook is a folder of or
 2. Run it, choose an installation location, and launch **Still Notes**.
 3. Start in the automatically created **Documents/Still Notes** notebook, or use the folder button at the bottom of the sidebar to open an existing folder.
 
-The installer adds Start menu and desktop shortcuts. Notes remain separate from the application, and uninstalling retains your notes and app settings. The release page identifies unsigned installers; these use manual updates. Automatic updates require a signed build.
+The installer adds Start menu and desktop shortcuts. Notes remain separate from the application, and uninstalling retains your notes and app settings. Windows may show an unknown-publisher warning for installers without Windows code signing. Automatic updates use a separate release-signing key and work with these installers.
 
 You can also build a portable copy using the [development instructions](#development). Run `Still Notes.exe` from the resulting `Still Notes-win32-x64` folder and keep its companion files beside it.
 
@@ -83,11 +83,11 @@ Session settings save as you work and before closing, switching notebooks, or re
 
 Public installers are available from [GitHub Releases](https://github.com/tsunsora/still-notes/releases/latest) without signing in. Run a newer installer to upgrade in place.
 
-Version 1.6.4 uses the public `tsunsora/still-notes` feed without GitHub authentication. Versions through 1.6.2 used the older authenticated feed; manually install a signed release if that updater cannot retrieve it.
+Version 1.6.7 uses the public `tsunsora/still-notes` feed without GitHub authentication and enables automatic updates without a Windows signing certificate. Versions 1.6.5 and 1.6.6 disabled automatic updates, and versions through 1.6.2 used the older authenticated feed. Install 1.6.7 manually once to move onto the automatic update channel.
 
-Automatic updates require a trusted publisher in the installed build's update configuration. The downloaded installer must pass Windows publisher verification, which is repeated before installation. Builds without publisher metadata use manual updates from startup, without repeated warnings or background retries. Clicking the version number opens GitHub Releases to download a newer installer.
+Each available update must include a release signature made by the application's Ed25519 signing key. The app embeds the public key and verifies the signed application identity, version, filename and SHA-512 checksum before downloading. It rehashes the cached installer before installation. Altered or unsigned update metadata and modified installers are rejected. Builds that include a Windows publisher also require its Authenticode signature to verify.
 
-Signed installations check after launch and every four hours, download newer stable versions in the background, and apply a ready update silently when you close the app. The bottom of the sidebar displays the installed version number. Hover over it for update status; click it to check for updates or restart when an update is ready. Both installation paths save pending notes and preferences first; a failed save keeps your edits open. Failed network checks retry with increasing delays.
+Installed builds check after launch and every four hours, download newer stable versions in the background, and apply a ready update silently when you close the app. The bottom of the sidebar displays the installed version number. Hover over it for update status; click it to check for updates or restart when an update is ready. Both installation paths save pending notes and preferences first; a failed save keeps your edits open. Failed network checks retry with increasing delays.
 
 Portable builds link to the installer. Development and automated test runs do not contact GitHub unless the optional live-feed check is explicitly run.
 
@@ -122,21 +122,22 @@ Run these on Windows with dependencies installed. Set `STILL_EXE` to a packaged 
 | `node tests/folders.cjs` | Folder animation, icons, and reduced motion |
 | `node tests/identity.cjs` | Reuse of the existing Still profile |
 | `node tests/update-close.cjs` | Save handshakes before close/restart, using a simulated installer |
-| `node tests/manual-updates.cjs` | Unsigned installed-build startup, quiet manual updates, and the GitHub Releases link |
-| `node tests/github-feed.cjs` | Optional public-feed metadata check; requires `STILL_EXE` pointing to a signed installer-built executable |
+| `node tests/unsigned-updates.cjs` | Automatic checks in installed builds without Windows signing credentials |
+| `node tests/github-feed.cjs` | Optional live feed/signature check; requires `STILL_EXE` pointing to an installer-built executable |
 
-The live-feed check never downloads or installs an update.
+The live-feed check does not install updates. It normally checks metadata and signatures only; set `STILL_FEED_DOWNLOAD_TEST=1` to also download and verify the actual installer in an isolated test cache.
 
 ### Publish a release
 
 1. Update the version in `package.json` and `package-lock.json`, and edit [RELEASE-NOTES.md](RELEASE-NOTES.md).
-2. Configure `WIN_CSC_LINK` (a certificate path or base64 PFX) and `WIN_CSC_KEY_PASSWORD` repository secrets for a trusted Windows code-signing certificate. Local builds use the same environment variables. Do not commit the certificate or its password.
-3. Push a matching `vVERSION` tag. The [Windows release workflow](.github/workflows/release.yml) checks the version, runs unit and integration tests, builds the signed installer, verifies both executable signatures and publisher metadata, and publishes a complete release through a draft. Missing signing credentials or invalid signatures stop publication.
-4. For signed releases published manually, run `npm run installer` with signing credentials and upload **all three** files together: `Still-Notes-Setup-VERSION.exe`, its `.exe.blockmap`, and `latest.yml`. Publish a stable release tagged `vVERSION`.
+2. Keep `STILL_UPDATE_SIGNING_KEY` configured as a repository secret containing the Ed25519 private key corresponding to [src/update-public-key.pem](src/update-public-key.pem). The private key must stay outside the repository; retain a protected backup. Local signing can use `STILL_UPDATE_SIGNING_KEY_FILE` pointing to the private PEM file.
+3. Optionally configure `WIN_CSC_LINK` (a certificate path or base64 PFX) and `WIN_CSC_KEY_PASSWORD` for Windows Authenticode signing. When configured, the workflow requires valid executable signatures and publisher metadata in addition to the release signature.
+4. Push a matching `vVERSION` tag. The [Windows release workflow](.github/workflows/release.yml) checks the version, runs unit and integration tests, builds the installer, signs and verifies its update metadata/checksum, and publishes a complete release through a draft. Missing update keys, invalid signatures, or mismatched installer checksums stop publication.
+5. To publish manually, run `npm run installer`, then `npm run sign-update` with the release key configured. Upload **all five** files together: `Still-Notes-Setup-VERSION.exe`, its `.exe.blockmap`, its `.exe.sig`, `latest.yml`, and `SHA256SUMS.txt`. Publish a stable release tagged `vVERSION`.
 
-The update feed needs `latest.yml`, its installer checksum, and publisher metadata embedded in the installed app. Default installer builds enforce `forceCodeSigning`. Local builds do not publish automatically. Portable development builds can be created without signing and do not enable automatic updates.
+The update feed requires `latest.yml` and the matching installer signature/checksum. Windows code signing is optional, while release signing is always required for automatic updates. Once Windows publisher metadata has been shipped, future updates to those installations must continue using a matching Windows certificate. Local builds do not publish automatically. Portable development builds do not enable automatic updates.
 
-For an unsigned manual-install release, explicitly build with `npm run installer -- --config.forceCodeSigning=false`, verify the packaged app, and publish the installer with a SHA-256 checksum file. Identify the installer as unsigned in the release notes and omit `latest.yml` and `.exe.blockmap`; unsigned releases must not enter the automatic update feed. Publisher verification remains enabled, and the app uses the GitHub Releases link for manual updates.
+Do not replace the embedded release public key without a migration plan: existing installations trust that key and reject signatures made by another key.
 
 ## Credits
 

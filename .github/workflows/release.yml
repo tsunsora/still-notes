@@ -26,30 +26,43 @@ jobs:
         run: node -e "if(process.env.GITHUB_REF_NAME !== 'v'+require('./package.json').version) process.exit(1)"
       - run: npm test
       - run: npm run test:integration
-      - name: Require release signing credentials
+      - name: Require update signing key
         env:
-          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          STILL_UPDATE_SIGNING_KEY: ${{ secrets.STILL_UPDATE_SIGNING_KEY }}
         run: |
-          if (-not $env:WIN_CSC_LINK) {
-            Write-Error "Configure WIN_CSC_LINK and WIN_CSC_KEY_PASSWORD repository secrets before publishing a Windows installer. Unsigned releases are blocked."
+          if (-not $env:STILL_UPDATE_SIGNING_KEY) {
+            Write-Error "Configure STILL_UPDATE_SIGNING_KEY before publishing automatic updates."
             exit 1
           }
       - name: Build installer and update metadata
         env:
           WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
-        run: npm run installer
-      - name: Verify signed release artifacts
+        run: |
+          if ($env:WIN_CSC_LINK) { npm run installer -- --config.forceCodeSigning=true }
+          else { npm run installer }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Sign update release
+        env:
+          STILL_UPDATE_SIGNING_KEY: ${{ secrets.STILL_UPDATE_SIGNING_KEY }}
+        run: npm run sign-update
+      - name: Verify release artifacts
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
         run: |
           $version = node -p "require('./package.json').version"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $files = @("../Still-Installer/Still-Notes-Setup-$version.exe", "../Still-Installer/win-unpacked/Still Notes.exe")
-          foreach ($file in $files) {
-            $signature = Get-AuthenticodeSignature -LiteralPath $file
-            if ($signature.Status -ne 'Valid') { throw "Publisher signature verification failed: $file" }
+          npm run sign-update -- --verify
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($env:WIN_CSC_LINK) {
+            $files = @("../Still-Installer/Still-Notes-Setup-$version.exe", "../Still-Installer/win-unpacked/Still Notes.exe")
+            foreach ($file in $files) {
+              $signature = Get-AuthenticodeSignature -LiteralPath $file
+              if ($signature.Status -ne 'Valid') { throw "Publisher signature verification failed: $file" }
+            }
+            $config = Get-Content -Raw -LiteralPath "../Still-Installer/win-unpacked/resources/app-update.yml"
+            if ($config -notmatch '(?m)^publisherName:') { throw "The signed build must pin a publisher." }
           }
-          $config = Get-Content -Raw -LiteralPath "../Still-Installer/win-unpacked/resources/app-update.yml"
-          if ($config -notmatch '(?m)^publisherName:') { throw "The update configuration must pin a publisher." }
       - name: Publish complete release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -57,6 +70,6 @@ jobs:
           $version = node -p "require('./package.json').version"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $installer = "../Still-Installer/Still-Notes-Setup-$version.exe"
-          gh release create "$env:GITHUB_REF_NAME" "$installer" "${installer}.blockmap" "../Still-Installer/latest.yml" --verify-tag --draft --title "Still Notes $version" --notes-file RELEASE-NOTES.md
+          gh release create "$env:GITHUB_REF_NAME" "$installer" "${installer}.blockmap" "${installer}.sig" "../Still-Installer/latest.yml" "../Still-Installer/SHA256SUMS.txt" --verify-tag --draft --title "Still Notes $version" --notes-file RELEASE-NOTES.md
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           gh release edit "$env:GITHUB_REF_NAME" --draft=false --latest
