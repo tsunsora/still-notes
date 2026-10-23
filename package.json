@@ -15,18 +15,18 @@
     "test:integration": "node tests/regressions.cjs && node tests/ui.cjs && node tests/session.cjs && node tests/repositories.cjs && node tests/folders.cjs && node tests/identity.cjs && node tests/update-close.cjs && node tests/unsigned-updates.cjs"
   },
   "dependencies": {
-    "dompurify": "3.4.15",
+    "dompurify": "3.4.17",
     "electron-updater": "6.8.9",
     "marked": "18.0.13"
   },
   "devDependencies": {
     "@electron/packager": "^20.3.0",
     "@material-design-icons/svg": "^0.14.15",
-    "electron": "44.4.2",
+    "electron": "44.9.3",
     "electron-builder": "26.15.3",
     "js-yaml": "4.3.2",
     "playwright": "^1.58.0",
-    "sharp": "^0.35.4"
+    "sharp": "^0.35.5"
   },
   "build": {
     "forceCodeSigning": false,
