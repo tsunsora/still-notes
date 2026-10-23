@@ -169,7 +169,8 @@ test('waking or reconnecting retries a stale failure without flooding checks',as
  t.mock.timers.enable({apis:['setTimeout','Date'],now:100000});
  const {updater,service}=setup();t.after(()=>service.stop());
  updater.checkForUpdates=async()=>{updater.checks++;throw Error('offline');};
- service.start();await service.check({background:true});
+ service.start();service.resume();await settle();assert.equal(updater.checks,0);
+ await service.check({background:true});
  service.resume();await settle();assert.equal(updater.checks,1);
  t.mock.timers.setTime(Date.now()+61000);updater.checkForUpdates=Updater.prototype.checkForUpdates;updater.available=false;
  service.resume();service.resume();await settle();assert.equal(updater.checks,2);assert.equal(service.snapshot().status,'current');

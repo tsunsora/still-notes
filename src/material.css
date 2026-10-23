@@ -116,3 +116,42 @@ header{padding-right:23px;-webkit-app-region:no-drag}
 #repositories-error{color:#eda9a9}
 #app-update{width:100%;justify-content:flex-start;padding:8px 10px;margin-top:2px;font-size:12px;color:var(--muted);text-align:left}
 #app-update.update-ready{color:var(--text);background:#ffffff08}
+
+/* Let placement carry meaning: one header row, words only when something needs attention. */
+header{height:52px;min-height:52px;gap:14px;padding-right:14px}
+#breadcrumb{color:var(--muted);font-weight:500}
+#note-controls{display:flex;align-items:center;gap:12px;flex:none}
+#note-controls .view-toggle{padding:2px}#note-controls .view-toggle:before{top:2px;bottom:2px;left:2px;width:calc(50% - 3px)}#note-controls .view-toggle button{padding:4px 0;width:60px;font-size:12.5px}
+#save-state{font-size:0;width:6px;height:6px;border-radius:50%;background:transparent;transition:background 200ms ease}
+#save-state.pending{background:var(--muted)}
+#save-state.error{font-size:12px;width:auto;height:auto;border-radius:0;color:#e9a3a3}
+.page{padding-top:40px}
+footer{height:34px;padding:0 26px;opacity:.75}
+#welcome{gap:10px;padding-bottom:110px}.welcome-mark{margin-bottom:26px}#welcome .primary{min-width:150px}#welcome .welcome-secondary{margin-top:0;min-width:150px}
+.tree-row.folder-selected{background:rgba(255,255,255,.035)}.tree-row.folder-selected .label,.tree-row.folder-selected .item-icon{color:var(--text)}
+#folder-label.selected{color:var(--text)}
+dialog h2{margin-bottom:18px}.icon-heading h2{margin:0 0 18px}
+#modal-field{display:flex;align-items:center;background:#202020;border:1px solid #ffffff18;border-radius:8px}
+#modal-field:focus-within{outline:2px solid #aeb8c4;outline-offset:2px}
+#modal-prefix{padding-left:11px;color:var(--muted);font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%;flex:none}
+#modal-field #modal-input{flex:1;min-width:0;border:0;background:transparent;padding:10px 10px 10px 6px}#modal-prefix[hidden]+#modal-input{padding-left:11px}
+#modal-field #modal-input:focus-visible{outline:none}
+#repositories-list{margin-top:4px}
+
+/* Updates: the bottom row holds the notebook switcher and a slot that only speaks when needed. */
+.side-bottom{display:flex;align-items:center;gap:4px}
+#open-folder{flex:1;min-width:0}
+#app-update{flex:none;width:auto;height:30px;margin:0;padding:0 10px;gap:7px;border-radius:999px;font-size:12px;color:var(--muted);opacity:0;transition:opacity 160ms ease,background 160ms ease,color 160ms ease}
+.side-bottom:hover #app-update,#app-update:focus-visible,#app-update:not([data-status=idle]):not([data-status=current]):not([data-status=disabled]){opacity:1}
+#app-update:disabled{cursor:default}
+.update-ring{display:none;width:14px;height:14px;border-radius:50%;background:conic-gradient(var(--text) var(--progress),#ffffff24 0);-webkit-mask:radial-gradient(circle,transparent 4px,#000 4.5px)}
+#app-update[data-status=downloading] .update-ring{display:block}#app-update[data-status=downloading] #update-label{display:none}
+#app-update[data-status=checking] #update-label{animation:update-pulse 1.1s ease-in-out infinite alternate}
+#app-update[data-status=confirmed]{color:var(--text)}
+#app-update[data-status=ready],#app-update[data-status=installing]{background:var(--button);color:var(--button-text);font-weight:600;padding:0 13px}
+#app-update[data-status=ready]:hover{background:var(--button);opacity:.88}
+#app-update[data-status=installing]{opacity:.6}
+#expand{position:relative}
+#expand.has-update:after{content:'';position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+@keyframes update-pulse{from{opacity:1}to{opacity:.35}}
+@media(prefers-reduced-motion:reduce){#app-update[data-status=checking] #update-label{animation:none}}

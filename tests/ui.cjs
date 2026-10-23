@@ -33,8 +33,9 @@ const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:
   assert.equal(await page.locator('#update-label').textContent(),versionLabel);
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].webContents.send('update-state',{status:'ready',percent:100,version:'1.6.0'}));
    await page.getByRole('button',{name:`Still Notes ${versionLabel} · Restart to update`,exact:true}).waitFor();
-   assert.equal(await page.locator('#update-label').textContent(),versionLabel);
-   assert.match(await page.locator('#app-update').getAttribute('title'),/1\.6\.0 is ready/);
+   assert.equal(await page.locator('#update-label').textContent(),'Update');
+   assert.match(await page.locator('#app-update').getAttribute('title'),/Still Notes 1\.6\.0/);
+   assert.equal(await page.locator('#expand.has-update').count(),1);
   await page.locator('#editor').fill('Saved before update');await page.locator('#app-update').click();
   // Test builds reject installation, so this also verifies UI recovery after failure.
   await page.getByRole('alert').filter({hasText:'No downloaded update'}).waitFor();

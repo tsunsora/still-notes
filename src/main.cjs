@@ -208,7 +208,8 @@ app.whenReady().then(async()=>{
    beforeInstall:async()=>{await writes;await persistWindowState();await settingsWrites;closing=true;},
    installFailed:()=>{closing=false;}
   });
-  powerMonitor.on('resume',()=>updates.resume());
+  // Timers drift across sleep; returning to the window is a natural moment to catch up.
+  powerMonitor.on('resume',()=>updates.resume());win.on('focus',()=>updates.resume());
   await win.loadURL(pathToFileURL(path.join(__dirname,'index.html')).href);if(restoredWindow.maximized)win.maximize();win.show();updates.start();
 });
 app.on('window-all-closed',()=>{clearTimeout(windowSaveTimer);updates?.stop();app.quit();});

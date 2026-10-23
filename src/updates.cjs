@@ -99,7 +99,8 @@ function createUpdates({updater,currentVersion='',disabledReason='',notify=()=>{
   running=true;schedule(10000);
  }
  function resume(){
-  if(!running||pending||Date.now()-lastCheck<RETRY_INTERVAL)return;
+  // Before the first check, the start-up timer is already on its way.
+  if(!running||pending||!lastCheck||Date.now()-lastCheck<RETRY_INTERVAL)return;
   if(state.status==='error'||Date.now()-lastCheck>=POLL_INTERVAL)void check({background:true});
  }
  function stop(){running=false;clearTimeout(timer);timer=null;}
