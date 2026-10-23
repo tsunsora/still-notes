@@ -83,7 +83,7 @@ Session settings save as you work and before closing, switching notebooks, or re
 
 Public installers are available from [GitHub Releases](https://github.com/tsunsora/still-notes/releases/latest) without signing in. Run a newer installer to upgrade in place.
 
-Version 1.6.7 uses the public `tsunsora/still-notes` feed without GitHub authentication and enables automatic updates without a Windows signing certificate. Versions 1.6.5 and 1.6.6 disabled automatic updates, and versions through 1.6.2 used the older authenticated feed. Install 1.6.7 manually once to move onto the automatic update channel.
+Version 1.6.7 and later use the public `tsunsora/still-notes` feed without GitHub authentication and enable automatic updates without a Windows signing certificate. Versions 1.6.5 and 1.6.6 disabled automatic updates, and versions through 1.6.2 used the older authenticated feed. Install the latest version manually once to move onto the automatic update channel.
 
 Each available update must include a release signature made by the application's Ed25519 signing key. The app embeds the public key and verifies the signed application identity, version, filename and SHA-512 checksum before downloading. It rehashes the cached installer before installation. Altered or unsigned update metadata and modified installers are rejected. Builds that include a Windows publisher also require its Authenticode signature to verify.
 

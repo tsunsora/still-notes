@@ -1,16 +1,13 @@
-# Still Notes 1.6.7
+# Still Notes 1.6.8
 
 ## What's new
 
-- Restores automatic updates without requiring a Windows code-signing certificate.
-- Downloads newer stable releases in the background and installs them when you close Still Notes. Click the version number to check now or restart when an update is ready.
-- Verifies every update with the application's release-signing key and checksum. Altered release metadata or modified installers cannot be installed. Windows publisher signatures are also verified when configured.
-- Keeps the version number visible and saves your notes, session, and preferences before installation.
-- Fixes the GitHub release workflow so future releases include all automatic-update files.
+- Security update. Updates Electron to 44.9.3 and the Markdown sanitizer (DOMPurify) to 3.4.17 to fix published security vulnerabilities.
+- Updates build tooling dependencies with security fixes. No changes to features, notes, or settings.
 
 ## Install or upgrade
 
-Download **Still-Notes-Setup-1.6.7.exe** below and run it once to upgrade. Versions 1.6.5 and 1.6.6 disabled their updater, so they cannot download this fix automatically. After this installation, future releases update automatically. Existing notes, saved folders, preferences, and shortcuts are preserved.
+Version 1.6.7 updates to this release automatically: it downloads in the background and installs when you close Still Notes. Click the version number to check now. Earlier versions should download **Still-Notes-Setup-1.6.8.exe** below and run it once to upgrade. Existing notes, saved folders, preferences, and shortcuts are preserved.
 
 The installer does not have a Windows Authenticode certificate, so Windows may show an unknown-publisher warning. Automatic updates use a separate application-specific signing key and do not require that certificate.
 
