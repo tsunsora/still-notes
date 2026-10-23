@@ -40,7 +40,7 @@ Still Notes is the new name for the same app. The installer upgrades existing in
 - **Read:** switch from **Write** to **Read** to preview Markdown. External links open in your browser; relative links such as `./Note.md` and `../Note.md` open notes within the notebook. HTTPS images render when online.
 - **Reorganize:** drag onto the middle of a folder to move inside it, between rows to reorder, or onto **Notes** to move to the root.
 - **Import:** drag Markdown files from Windows Explorer onto a folder to import copies. The originals remain in place.
-- **Customize:** use **Change icon** on a note, or **Use default icon** to reset it. Folder icons are fixed. Drag the sidebar edge to resize it; double-click to reset its width.
+- **Customize:** use **Change icon** on a note; the first icon in the grid restores the default. Folder icons are fixed. Drag the sidebar edge to resize it; double-click to reset its width.
 
 ### Switch notebooks
 
@@ -50,7 +50,7 @@ Use **× → Remove** to forget a saved folder, including one that is no longer 
 
 ### Keep your files safe
 
-The top-right save status shows whether changes are on disk. **Refresh** reloads the tree and active note. If another app changes a note, Still Notes refuses to overwrite it: copy any unsaved text you want to keep, then choose **Reload from disk** in the note menu.
+A dot beside Write/Read means changes are still being saved; if a save fails, **Not saved** appears there instead. **Refresh** reloads the tree and active note. If another app changes a note, Still Notes refuses to overwrite it: copy any unsaved text you want to keep, then choose **Reload from disk** in the note menu.
 
 During note loading, the editor and title are temporarily read-only. Launching Still Notes again brings the existing window forward instead of opening a second process using the same profile.
 
@@ -87,7 +87,7 @@ Version 1.6.7 and later use the public `tsunsora/still-notes` feed without GitHu
 
 Each available update must include a release signature made by the application's Ed25519 signing key. The app embeds the public key and verifies the signed application identity, version, filename and SHA-512 checksum before downloading. It rehashes the cached installer before installation. Altered or unsigned update metadata and modified installers are rejected. Builds that include a Windows publisher also require its Authenticode signature to verify.
 
-Installed builds check after launch and every four hours, download newer stable versions in the background, and apply a ready update silently when you close the app. The bottom of the sidebar displays the installed version number. Hover over it for update status; click it to check for updates or restart when an update is ready. Both installation paths save pending notes and preferences first; a failed save keeps your edits open. Failed network checks retry with increasing delays.
+Installed builds check after launch and every four hours, download newer stable versions in the background, and apply a ready update silently when you close the app. Hover over the bottom of the sidebar to see the installed version; click it to check for updates. A progress ring shows while an update downloads, and an **Update** button appears when it is ready to install with a restart. Both installation paths save pending notes and preferences first; a failed save keeps your edits open. Failed network checks retry with increasing delays.
 
 Portable builds link to the installer. Development and automated test runs do not contact GitHub unless the optional live-feed check is explicitly run.
 
