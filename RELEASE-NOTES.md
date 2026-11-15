@@ -1,4 +1,4 @@
-# Still Notes 1.8.1
+# Still Notes 1.8.2
 
 ## What's new
 
@@ -8,7 +8,7 @@ This release also includes everything from 1.8.0: light, dark, and system themes
 
 ## Install or upgrade
 
-Version 1.6.7 and later update to this release automatically: it downloads in the background and installs when you close Still Notes. Click the version number to check now. Earlier versions should download **Still-Notes-Setup-1.8.1.exe** below and run it once to upgrade. Existing notes, saved folders, preferences, and shortcuts are preserved.
+Version 1.6.7 and later update to this release automatically: it downloads in the background and installs when you close Still Notes. Click the version number to check now. Earlier versions should download **Still-Notes-Setup-1.8.2.exe** below and run it once to upgrade. Existing notes, saved folders, preferences, and shortcuts are preserved.
 
 The installer does not have a Windows Authenticode certificate, so Windows may show an unknown-publisher warning. Automatic updates use a separate application-specific signing key and do not require that certificate.
 
