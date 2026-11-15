@@ -77,6 +77,10 @@ async function fixture(files,run){
  });
 
  await fixture({'A.md':'Original A'},async({app,page,env,bootstrap,data})=>{
+  // Let the startup session save land first; a minimized window runs it late and it would overwrite the width below.
+  const settled=async()=>{try{return Object.values(JSON.parse(await fs.readFile(path.join(data,'settings.json'),'utf8')).workspaces||{}).some(w=>w.session);}catch{return false;}};
+  for(let i=0;!await settled();i++){assert(i<300,'startup session save never landed');await page.waitForTimeout(20);}
+  await page.waitForTimeout(100);
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].minimize());
   const duplicate=spawn(require('electron'),[bootstrap],{env,windowsHide:true,stdio:'ignore'});
   const timeout=setTimeout(()=>duplicate.kill(),10000);
