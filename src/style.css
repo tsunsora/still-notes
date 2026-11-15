@@ -131,18 +131,14 @@ main{position:relative;flex:1;min-width:0;display:flex;flex-direction:column;bac
 .tree-row.drop-before:before{top:-2px}.tree-row.drop-after:after{bottom:-2px}
 #tree.drop-into{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 50%,transparent);border-radius:12px}
 
-/* Rail footer: notebook switcher, and an update slot that speaks only when needed. */
+/* Rail footer: notebook switcher and Settings, which wears a dot when an update is ready. */
 .side-bottom{display:flex;align-items:center;gap:4px;padding:8px 0 12px;border-top:1px solid var(--hairline)}
 #open-folder{flex:1;min-width:0;height:40px;justify-content:flex-start;gap:8px;padding:0 12px;font-size:13px;border-radius:20px;color:var(--text)}
 #open-folder>[data-icon]{color:var(--text-2)}
 #workspace-name{flex:1;min-width:0;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#app-update{flex:none;height:28px;padding:0 12px;gap:8px;border-radius:14px;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;opacity:0;transition:opacity var(--fast) var(--ease),background-color var(--fast) var(--ease),color var(--fast) var(--ease)}
-.side-bottom:hover #app-update,#app-update:focus-visible,#app-update:not([data-status=idle]):not([data-status=current]):not([data-status=disabled]){opacity:1}
-#app-update:disabled{cursor:default;opacity:1}
-#app-update[data-status=confirmed]{color:var(--text)}
-#app-update[data-status=ready],#app-update[data-status=installing]{background:var(--md-sys-color-primary);color:var(--md-sys-color-on-primary);font-weight:600}
-#app-update[data-status=ready]:hover{background:color-mix(in srgb,var(--md-sys-color-primary) 88%,var(--md-sys-color-on-primary))}
-#app-update[data-status=installing]{opacity:.6}
+#settings{position:relative;flex:none;color:var(--text-2)}
+#settings:hover{color:var(--text)}
+#settings.has-update:after{content:'';position:absolute;top:6px;right:6px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
 .update-ring{display:none;width:14px;height:14px;border-radius:50%;background:conic-gradient(var(--accent) var(--progress),var(--hairline) 0);-webkit-mask:radial-gradient(circle,transparent 4px,#000 4.5px)}
 #app-update[data-status=downloading] .update-ring{display:block}
 #app-update[data-status=downloading] #update-label{display:none}
@@ -282,20 +278,50 @@ dialog select option{background:var(--menu)}
 .icon-choice[aria-pressed=true]{background:var(--selected);color:var(--on-selected)}
 .icon-choice svg.material-icon{width:24px;height:24px}
 
-/* Appearance. */
-#appearance-dialog{width:min(400px,90vw)}
+/* Settings: Appearance, then Updates. Sections sit on the dialog's own surface, one step lower. */
+#settings-dialog{width:min(460px,92vw);max-height:min(720px,90vh);overflow-y:auto;scrollbar-gutter:stable}
+.settings-section{padding:16px;border-radius:20px;background:var(--md-sys-color-surface-container)}
+.settings-section+.settings-section{margin-top:12px}
+.settings-section h3{margin:0 0 12px;font-size:14px;font-weight:600;color:var(--accent)}
+.settings-section .segmented{background:var(--md-sys-color-surface-container-highest)}
 .field-label{margin:4px 0 8px;font-size:13px;font-weight:600;color:var(--text-2)}
+dialog label.switch-row{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 20px;cursor:pointer}
+.switch-text{display:flex;flex-direction:column;gap:2px}
+.switch-title{font-size:14px;color:var(--text)}
+.switch-hint{font-size:12px;color:var(--text-2)}
+dialog input[role=switch]{appearance:none;flex:none;position:relative;width:52px;height:32px;padding:0;margin:0;border:2px solid var(--md-sys-color-outline);border-radius:16px;background:var(--md-sys-color-surface-container-highest);cursor:pointer}
+dialog input[role=switch]:before{content:'';position:absolute;top:50%;left:6px;width:16px;height:16px;border-radius:50%;background:var(--md-sys-color-outline);transform:translateY(-50%)}
+dialog input[role=switch]:checked{border-color:var(--md-sys-color-primary);background:var(--md-sys-color-primary)}
+dialog input[role=switch]:checked:before{left:22px;width:24px;height:24px;background:var(--md-sys-color-on-primary)}
+dialog input[role=switch]:disabled{opacity:.38;cursor:default}
+.switch-row:has(input:disabled){cursor:default}
+#style-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.palette-style{flex-direction:column;gap:6px;height:auto;padding:10px 4px;border-radius:14px;background:var(--md-sys-color-surface-container-high);font-size:12px;color:var(--text-2)}
+.palette-style:hover{background:var(--md-sys-color-surface-container-highest);color:var(--text)}
+.palette-style[aria-checked=true]{background:var(--md-sys-color-secondary-container);color:var(--md-sys-color-on-secondary-container);font-weight:600}
+.palette-style .seed-swatch{width:28px;height:28px}
+.palette-style-name{white-space:nowrap}
+.update-row{display:flex;align-items:center;gap:16px}
+.update-text{flex:1;min-width:0}
+#update-version{font-size:14px;color:var(--text);font-variant-numeric:tabular-nums}
+#update-status{margin-top:2px;font-size:12px;line-height:1.5;color:var(--text-2)}
+#app-update{flex:none;height:36px;padding:0 16px;gap:8px;border-radius:18px;font-size:13px;font-weight:600;color:var(--accent);background:var(--md-sys-color-surface-container-high);font-variant-numeric:tabular-nums}
+#app-update:hover{background:var(--md-sys-color-surface-container-highest)}
+#app-update.primary{background:var(--md-sys-color-primary);color:var(--md-sys-color-on-primary)}
+#app-update.primary:hover{background:color-mix(in srgb,var(--md-sys-color-primary) 88%,var(--md-sys-color-on-primary))}
+#app-update:disabled{cursor:default}
+#app-update[data-status=installing]{opacity:.6}
 .segmented{margin-bottom:24px}
 .segmented button{flex:1;height:32px;border-radius:16px;font-size:13px;color:var(--text-2)}
 .segmented button:hover{color:var(--text)}
 .segmented [aria-checked=true]{background:var(--md-sys-color-secondary-container);color:var(--md-sys-color-on-secondary-container);font-weight:600}
 #seed-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
-.seed{position:relative;width:100%;aspect-ratio:1;border-radius:14px;padding:0;background:var(--md-sys-color-surface-container)}
+.seed{position:relative;width:100%;aspect-ratio:1;border-radius:14px;padding:0;background:var(--md-sys-color-surface-container-high)}
 .seed:hover{background:var(--md-sys-color-surface-container-highest)}
 .seed-swatch{width:32px;height:32px;border-radius:50%;overflow:hidden;background:conic-gradient(from 90deg,var(--seed-tertiary) 0 25%,var(--seed-secondary) 0 50%,var(--seed-primary) 0)}
 .seed[aria-checked=true]{background:var(--md-sys-color-secondary-container)}
 .seed>svg.material-icon{position:absolute;width:20px;height:20px;padding:3px;border-radius:50%;background:var(--md-sys-color-primary);color:var(--md-sys-color-on-primary)}
-#seed-name{margin:12px 0 0;font-size:13px;color:var(--text-2)}
+#seed-name{margin:10px 0 20px;font-size:13px;color:var(--text-2)}
 
 @media(max-width:850px){
  .page{padding:32px 32px 72px}
@@ -309,6 +335,7 @@ dialog select option{background:var(--menu)}
  #sidebar{transition:width var(--slow) var(--ease),min-width var(--slow) var(--ease),padding var(--slow) var(--ease),opacity 160ms var(--ease),transform var(--slow) var(--ease)}
  main{transition:border-radius var(--slow) var(--ease)}
  .view-toggle:before{transition:transform 200ms var(--ease)}
+ dialog input[role=switch],dialog input[role=switch]:before{transition:all 200ms var(--ease)}
  dialog[open]{animation:dialog-in 220ms var(--ease)}
  dialog[open]::backdrop{animation:fade-in 180ms var(--ease)}
  #context:not([hidden]){animation:menu-in var(--menu-in) var(--ease);transform-origin:top left}

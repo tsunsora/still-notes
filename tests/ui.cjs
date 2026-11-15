@@ -13,8 +13,11 @@ const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:
   assert.equal(await page.title(),'Still Notes');assert.equal(await page.locator('.brand strong').textContent(),'Still Notes');
   assert.equal(await app.evaluate(({app})=>app.getName()),'Still Notes');
   const versionLabel='v'+await app.evaluate(({app})=>app.getVersion());
-  await page.locator('#app-update').waitFor();
-  assert.equal(await page.locator('#update-label').textContent(),versionLabel);
+  // Updates moved into Settings; the rail footer holds only the settings button.
+  await page.locator('.side-bottom #settings').click();await page.locator('#updates-section').waitFor();
+  assert.equal(await page.locator('#update-version').textContent(),`Still Notes ${versionLabel}`);
+  assert.match(await page.locator('#update-label').textContent(),/^(Check for updates|Unavailable)$/);
+  await page.keyboard.press('Escape');await page.locator('#settings-dialog').waitFor({state:'hidden'});
   assert.equal(await page.locator('#new-note, #new-folder, .side-actions').count(),0);
   await page.keyboard.press('Control+Shift+N');await page.locator('#modal-input').fill('Shortcut folder');await page.locator('#modal-submit').click();await page.locator('#modal').waitFor({state:'hidden'});
   await page.keyboard.press('Control+n');await page.locator('#modal-input').fill('Shortcut note');await page.locator('#modal-submit').click();
@@ -25,25 +28,31 @@ const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:
   await page.waitForFunction(()=>document.querySelector('#note-title').value==='Context note');
   assert.equal(await fs.readFile(path.join(root,'Shortcut folder','Context note.md'),'utf8'),'');
    // Exercise update status messages and save-before-install through the real IPC boundary.
+   await page.locator('#settings').click();await page.locator('#settings-dialog').waitFor();
    await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].webContents.send('update-state',{status:'error',background:true,message:'Will retry automatically'}));
    await page.getByRole('button',{name:`Still Notes ${versionLabel} · Check for updates`,exact:true}).waitFor();
-   assert.equal(await page.locator('#update-label').textContent(),versionLabel);
+   assert.equal(await page.locator('#update-label').textContent(),'Check for updates');
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].webContents.send('update-state',{status:'downloading',percent:37,version:'1.6.0'}));
   await page.getByRole('button',{name:`Still Notes ${versionLabel} · Downloading update · 37%`,exact:true}).waitFor();assert.equal(await page.locator('#app-update').isDisabled(),true);
-  assert.equal(await page.locator('#update-label').textContent(),versionLabel);
+  assert.equal(await page.locator('#update-label').textContent(),'37%');
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].webContents.send('update-state',{status:'ready',percent:100,version:'1.6.0'}));
    await page.getByRole('button',{name:`Still Notes ${versionLabel} · Restart to update`,exact:true}).waitFor();
-   assert.equal(await page.locator('#update-label').textContent(),'Update');
+   assert.equal(await page.locator('#update-label').textContent(),'Restart to update');
+   assert.match(await page.locator('#update-status').textContent(),/1\.6\.0 is ready/);
    assert.match(await page.locator('#app-update').getAttribute('title'),/Still Notes 1\.6\.0/);
-   assert.equal(await page.locator('#expand.has-update').count(),1);
-  await page.locator('#editor').fill('Saved before update');await page.locator('#app-update').click();
+   assert.equal(await page.locator('#expand.has-update').count(),1);assert.equal(await page.locator('#settings.has-update').count(),1);
+   await page.keyboard.press('Escape');await page.locator('#settings-dialog').waitFor({state:'hidden'});
+   assert.equal(await page.getByRole('button',{name:'Settings · Update ready'}).count(),1);
+  // Restarting closes Settings first, so the outcome shows over the note.
+  await page.locator('#editor').fill('Saved before update');await page.locator('#settings').click();await page.locator('#app-update').click();
+  await page.locator('#settings-dialog').waitFor({state:'hidden'});
   // Test builds reject installation, so this also verifies UI recovery after failure.
   await page.getByRole('alert').filter({hasText:'No downloaded update'}).waitFor();
   assert.equal(await fs.readFile(path.join(root,'Shortcut folder','Context note.md'),'utf8'),'Saved before update');
    assert.equal(await page.locator('body').evaluate(body=>body.inert),false);
    // A conflicting disk edit must block both restart and normal close.
    await fs.writeFile(path.join(root,'Shortcut folder','Context note.md'),'External edit');
-   await page.locator('#editor').fill('Keep my unsaved edit');await page.locator('#app-update').click();
+   await page.locator('#editor').fill('Keep my unsaved edit');await page.locator('#settings').click();await page.locator('#app-update').click();
    await page.getByRole('alert').filter({hasText:'This note changed in another app'}).waitFor();
    assert.equal(await page.locator('body').evaluate(body=>body.inert),false);
    await page.locator('#close').click();

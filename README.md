@@ -34,16 +34,16 @@
 - **A familiar sidebar.** Folders, drag-and-drop, note icons, and keyboard shortcuts.
 - **Several notebooks.** Switch between local folders; each remembers its own session.
 - **Picks up where you left off.** Window, sidebar, open note, reading position, and text selection.
-- **Material color.** Light, dark, or system theme, with a Material 3 palette generated from your Windows accent color or one of six presets.
+- **Material color.** Light, dark, or system theme, with a Material 3 palette generated from your Windows accent color or one of six presets, in any of eight palette styles. Dark mode can go pure black.
 
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshot-write.png" alt="Write mode with the Markdown formatting bar, in a light green theme"></td>
-    <td width="50%"><img src="docs/screenshot-appearance.png" alt="The Appearance dialog with theme mode and seven color swatches"></td>
+    <td width="50%"><img src="docs/screenshot-appearance.png" alt="The Settings dialog with theme mode, pure black, color swatches, palette styles, and updates"></td>
   </tr>
   <tr>
     <td align="center"><sub>Write mode, light theme with the Moss color</sub></td>
-    <td align="center"><sub>Appearance, dark theme with the Clay color</sub></td>
+    <td align="center"><sub>Settings, dark theme with the Clay color</sub></td>
   </tr>
 </table>
 
@@ -72,7 +72,7 @@ Prefer a portable copy? Follow the [development steps](#development), then run `
 | **Reorganize** | Drag onto the middle of a folder to move inside it, between rows to reorder, or onto **Notes** to move to the top level. |
 | **Import** | Drag Markdown files from Explorer onto a folder to import copies. The originals stay where they are. |
 | **Customize** | Use **Change icon** on a note; the first icon resets it. Folder icons are fixed. Drag the sidebar edge to resize it, and double-click to reset. |
-| **Appearance** | Click the palette button beside the app name to pick Light, Dark, or System, and a color: your Windows accent or Slate, Ink, Moss, Clay, Ochre, or Rose. |
+| **Settings** | Click the gear at the bottom of the sidebar. Under Appearance, pick Light, Dark, or System; turn on Pure black for black surfaces in the dark theme; pick a color (your Windows accent or Slate, Ink, Moss, Clay, Ochre, or Rose); and pick a palette style: Tonal spot, Vibrant, Expressive, Rainbow, Fruit salad, Monochrome, Neutral, or Content. Under Updates, see your version and check for updates. |
 
 ### Keyboard shortcuts
 
@@ -110,7 +110,7 @@ An Obsidian vault can be opened as a folder. Still Notes supports standard Markd
 
 ## Updates
 
-Installed builds check for updates after launch and every four hours, download new stable versions in the background, and install a ready update quietly when you close the app. Hover over the bottom of the sidebar to see your version and click it to check now. A progress ring shows while an update downloads, and an **Update** button appears when it can be installed with a restart. Either way, pending notes and settings save first; if that fails, your edits stay open. Failed checks retry with growing delays.
+Installed builds check for updates after launch and every four hours, download new stable versions in the background, and install a ready update quietly when you close the app. Open **Settings** from the gear at the bottom of the sidebar to see your version and check now. Updates shows download progress, and a **Restart to update** button appears when an update can be installed; the gear wears a dot until then. Either way, pending notes and settings save first; if that fails, your edits stay open. Failed checks retry with growing delays.
 
 Installers are always available from [GitHub Releases](https://github.com/tsunsora/still-notes/releases/latest) without signing in, and running a newer one upgrades in place. Portable builds link to the installer instead of updating themselves. Development and test runs don't contact GitHub unless the optional live-feed check is run.
 
@@ -164,7 +164,7 @@ Run these on Windows with dependencies installed. Set `STILL_EXE` to a packaged 
 | `node tests/identity.cjs` | Reuse of the existing Still profile |
 | `node tests/update-close.cjs` | Save handshakes before close and restart, with a simulated installer |
 | `node tests/unsigned-updates.cjs` | Automatic checks in installed builds without Windows signing |
-| `node tests/appearance.cjs` | Material color roles, theme modes, color swatches, and persistence |
+| `node tests/appearance.cjs` | Material color roles, theme modes, palette styles, pure black, color swatches, the Settings dialog, and persistence |
 | `node tests/github-feed.cjs` | Optional live feed and signature check; needs `STILL_EXE` set to an installer-built executable |
 
 The live-feed check never installs anything. It checks metadata and signatures only, unless `STILL_FEED_DOWNLOAD_TEST=1` is set, in which case it also downloads and verifies the installer in an isolated cache.

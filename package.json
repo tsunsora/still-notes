@@ -1,7 +1,7 @@
 {
   "name": "still-notes",
   "productName": "Still Notes",
-  "version": "1.8.2",
+  "version": "1.9.0",
   "description": "A quiet space for Markdown notes",
   "main": "src/main.cjs",
   "author": "Still Notes",
@@ -15,7 +15,7 @@
     "test:integration": "node tests/regressions.cjs && node tests/ui.cjs && node tests/session.cjs && node tests/repositories.cjs && node tests/folders.cjs && node tests/identity.cjs && node tests/update-close.cjs && node tests/unsigned-updates.cjs && node tests/appearance.cjs"
   },
   "dependencies": {
-    "@material/material-color-utilities": "0.3.0",
+    "@material/material-color-utilities": "0.4.0",
     "dompurify": "3.4.17",
     "electron-updater": "6.8.9",
     "marked": "18.0.13"

@@ -72,7 +72,8 @@ async function activateRoot(next){
 }
 // Material color: a theme mode plus one seed, either a saved hex or the live Windows accent.
 const DEFAULT_SEED='#56707a';
-function normalizeAppearance(value){const mode=['system','light','dark'].includes(value?.mode)?value.mode:'dark';const seed=value?.seed==='accent'||/^#[0-9a-f]{6}$/i.test(value?.seed||'')?value.seed.toLowerCase():DEFAULT_SEED;return {mode,seed};}
+const PALETTE_STYLES=['tonalSpot','vibrant','expressive','rainbow','fruitSalad','monochrome','neutral','content'];
+function normalizeAppearance(value){const mode=['system','light','dark'].includes(value?.mode)?value.mode:'dark';const seed=value?.seed==='accent'||/^#[0-9a-f]{6}$/i.test(value?.seed||'')?value.seed.toLowerCase():DEFAULT_SEED;const style=PALETTE_STYLES.includes(value?.style)?value.style:'tonalSpot';return {mode,seed,style,pureBlack:value?.pureBlack===true};}
 function accentColor(){try{const value=systemPreferences.getAccentColor?.();return /^[0-9a-f]{6}/i.test(value||'')?'#'+value.slice(0,6).toLowerCase():'';}catch{return '';}}
 async function snapshot() { return {root, repositories:settings.repositories||[],name:root ? path.basename(root) : '', tree:root ? await scan() : [], last:settings.last || '', mode:settings.mode==='preview'?'preview':'edit',sidebarWidth:settings.sidebarWidth||280,sidebarHidden:settings.sidebarHidden===true,appearance:normalizeAppearance(settings.appearance),accentColor:accentColor(),session:root?normalizeWorkspaceState(workspaceMeta().session):null,icons:root?Object.fromEntries(workspaceMeta().icons):{}}; }
 function handle(name, fn) { ipcMain.handle(name, async (event,...args) => {

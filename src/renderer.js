@@ -2,7 +2,7 @@ import {marked} from '../node_modules/marked/lib/marked.esm.js';
 const $=s=>document.querySelector(s);
 import {icons,iconCatalog} from './icons.js';
 import {resolveNoteLink} from './note-links.mjs';
-import {applyTheme,applyCachedTheme,currentAppearance,currentAccent,presets,scheme,isDark} from './theme.js';
+import {applyTheme,applyCachedTheme,currentAppearance,currentAccent,presets,paletteStyles,scheme,seedColor,isDark} from './theme.js';
 applyCachedTheme();
 function icon(name){return icons[name]||icons.note;}
 document.querySelectorAll('[data-icon]').forEach(el=>el.innerHTML=icon(el.dataset.icon));
@@ -220,62 +220,84 @@ function updateWindowControls(state){const maximized=state.maximized;const butto
 window.stillEvents.windowState(updateWindowControls);
 attempt(async()=>updateWindowControls(await api('window-state')))();
 
-// The update slot stays a faint version number until there is something to show:
-// a progress ring while downloading, then an Update button once ready.
+// Updates live in Settings. The sidebar's settings button carries a dot once an update is
+// ready; the dialog shows the version, what the updater is doing, and the one action.
 let updateState={status:'idle'},installingUpdate=false,currentVersion='',confirmedUntil=0;
 function renderUpdate(next){
  updateState=next;const button=$('#app-update');
  if(next.currentVersion)currentVersion=next.currentVersion;
  const status=installingUpdate?'installing':next.status==='error'&&next.background?'idle':next.status;
- const confirmed=status==='current'&&Date.now()<confirmedUntil;
- button.hidden=!currentVersion;button.dataset.status=confirmed?'confirmed':status;
+ const confirmed=status==='current'&&Date.now()<confirmedUntil,development=status==='disabled'&&next.reason==='development';
+ $('#updates-section').hidden=!currentVersion;button.dataset.status=confirmed?'confirmed':status;
  button.style.setProperty('--progress',(status==='installing'?100:next.percent||0)+'%');
- button.disabled=['checking','downloading','installing'].includes(status)||(status==='disabled'&&next.reason==='development');
- const labels={idle:'Check for updates',checking:'Checking for updates…',current:'Up to date · Check again',downloading:`Downloading update · ${next.percent}%`,ready:'Restart to update',installing:'Installing update…',error:'Retry update check',disabled:'Open releases on GitHub'};
- if(status==='disabled'&&next.reason==='development')labels.disabled='Development build';
+ button.disabled=['checking','downloading','installing'].includes(status)||development;
+ const labels={idle:'Check for updates',checking:'Checking for updates…',current:'Up to date · Check again',downloading:`Downloading update · ${next.percent}%`,ready:'Restart to update',installing:'Installing update…',error:'Retry update check',disabled:development?'Development build':'Open releases on GitHub'};
+ const short={idle:'Check for updates',checking:'Checking…',current:'Check again',confirmed:'Up to date',downloading:`${next.percent||0}%`,ready:'Restart to update',installing:'Installing…',error:'Try again',disabled:development?'Unavailable':'Open releases'};
+ const statusText={idle:'Updates download in the background and install when you close.',checking:'Checking for updates…',current:'Still Notes is up to date.',downloading:`Downloading ${next.version?'version '+next.version:'an update'}…`,ready:`Version ${next.version} is ready. It installs when you close, or restart now.`,installing:'Installing update…',error:next.message||'Couldn’t check for updates.',disabled:development?'Updates are off in development builds.':'Automatic updates aren’t available for this copy.'};
  const versionLabel=`v${currentVersion}`,action=labels[status]||labels.idle;
- $('#update-label').textContent=status==='ready'||status==='installing'?'Update':confirmed?'Up to date':versionLabel;
+ $('#update-version').textContent=`Still Notes ${versionLabel}`;
+ $('#update-status').textContent=confirmed?statusText.current:statusText[status]||statusText.idle;
+ $('#update-label').textContent=confirmed?short.confirmed:short[status]||short.idle;
+ button.classList.toggle('primary',status==='ready'||status==='installing');
  button.setAttribute('aria-label',`Still Notes ${versionLabel} · ${action}`);
  button.title=status==='ready'?`Restart to install Still Notes ${next.version}. Otherwise it installs when you close.`:next.message||action;
- $('#expand').classList.toggle('has-update',status==='ready');
+ for(const target of [$('#expand'),$('#settings')])target.classList.toggle('has-update',status==='ready');
+ $('#settings').setAttribute('aria-label',status==='ready'?'Settings · Update ready':'Settings');
 }
 window.stillEvents.updateState(renderUpdate);
 $('#app-update').onclick=attempt(async()=>{
  if(updateState.status==='disabled'){await api('external','https://github.com/tsunsora/still-notes/releases/latest');return;}
  if(updateState.status==='ready'){
+  // Close Settings first so save conflicts and install errors surface over the note, not behind a modal.
+  $('#settings-dialog').close();
   installingUpdate=true;document.body.inert=true;renderUpdate(updateState);
   try{await flush();await persistSession();await api('install-update');}
   finally{installingUpdate=false;document.body.inert=false;renderUpdate(updateState);}
  }else{
   const next=await api('check-updates');
   if(next.status==='current'){confirmedUntil=Date.now()+2500;setTimeout(()=>renderUpdate(updateState),2600);}
-  renderUpdate(next);if(next.status==='error')toast(next.message);
+  renderUpdate(next);if(next.status==='error'&&!$('#settings-dialog').open)toast(next.message);
  }
 });
 attempt(async()=>renderUpdate(await api('update-state')))();
 window.addEventListener('online',()=>{api('resume-updates').catch(()=>{});});
 
-// Appearance: theme mode plus a Material seed. Each swatch previews its own scheme
-// the way Material You pickers do, primary over secondary and tertiary.
+// Appearance, after Metrolist: theme mode, pure black, a seed color and a palette style.
+// Each swatch previews its own scheme the way Material You pickers do, primary over
+// secondary and tertiary, in the palette style that is currently chosen.
+function swatch(b,colors){b.style.setProperty('--seed-primary',colors.primary);b.style.setProperty('--seed-secondary',colors.secondaryContainer);b.style.setProperty('--seed-tertiary',colors.tertiaryContainer);}
+function radio(b,name,on){b.type='button';b.setAttribute('role','radio');b.setAttribute('aria-checked',on);b.tabIndex=on?0:-1;if(name){b.setAttribute('aria-label',name);b.title=name;}}
 function renderAppearance(){
- const value=currentAppearance(),dark=isDark(value);
- $('#theme-mode').querySelectorAll('button').forEach(b=>{const on=b.dataset.mode===value.mode;b.setAttribute('aria-checked',on);b.tabIndex=on?0:-1;});
+ const value=currentAppearance(),dark=isDark(value),options={style:value.style};
+ $('#theme-mode').querySelectorAll('button').forEach(b=>radio(b,'',b.dataset.mode===value.mode));
+ const pureBlack=$('#pure-black');pureBlack.checked=value.pureBlack===true;pureBlack.disabled=!dark;
+ $('#pure-black-hint').textContent=dark?'Black surfaces in the dark theme':'Available in the dark theme';
  const grid=$('#seed-grid');grid.replaceChildren();
- const accent=currentAccent(),options=[...(accent?[{id:'accent',name:'Windows accent',color:accent}]:[]),...presets.map(p=>({...p,color:p.id}))];
- for(const option of options){
-  const colors=scheme(option.color,dark),b=document.createElement('button'),on=value.seed===option.id;
-  b.type='button';b.className='seed';b.setAttribute('role','radio');b.setAttribute('aria-checked',on);b.setAttribute('aria-label',option.name);b.title=option.name;b.tabIndex=on?0:-1;
-  b.style.setProperty('--seed-primary',colors.primary);b.style.setProperty('--seed-secondary',colors.secondaryContainer);b.style.setProperty('--seed-tertiary',colors.tertiaryContainer);
+ const accent=currentAccent(),seeds=[...(accent?[{id:'accent',name:'Windows accent',color:accent}]:[]),...presets.map(p=>({...p,color:p.id}))];
+ for(const option of seeds){
+  const b=document.createElement('button'),on=value.seed===option.id;
+  radio(b,option.name,on);b.className='seed';swatch(b,scheme(option.color,dark,options));
   b.innerHTML='<span class="seed-swatch" aria-hidden="true"></span>'+(on?icon('checkmark'):'');
   b.onclick=()=>setAppearance({seed:option.id});grid.append(b);
   if(on)$('#seed-name').textContent=option.name;
  }
+ const styles=$('#style-grid');styles.replaceChildren();
+ for(const option of paletteStyles){
+  const b=document.createElement('button'),on=value.style===option.id;
+  radio(b,'',on);b.className='palette-style';b.dataset.style=option.id;swatch(b,scheme(seedColor(value),dark,{style:option.id}));
+  b.innerHTML='<span class="seed-swatch" aria-hidden="true"></span><span class="palette-style-name"></span>';b.lastChild.textContent=option.name;
+  b.onclick=()=>setAppearance({style:option.id});styles.append(b);
+ }
 }
-function setAppearance(change){const value=applyTheme(change);savePreferences({appearance:value});renderAppearance();const target=change.seed?$('#seed-grid [aria-checked="true"]'):$('#theme-mode [aria-checked="true"]');target?.focus();}
+function setAppearance(change){
+ const value=applyTheme(change);savePreferences({appearance:value});renderAppearance();
+ const target=change.seed?$('#seed-grid [aria-checked="true"]'):change.style?$('#style-grid [aria-checked="true"]'):change.mode?$('#theme-mode [aria-checked="true"]'):null;target?.focus();
+}
 function radioKeys(group,pick){group.addEventListener('keydown',e=>{const items=[...group.querySelectorAll('[role=radio]')],index=items.indexOf(document.activeElement);if(index<0)return;const step={ArrowRight:1,ArrowDown:1,ArrowLeft:-1,ArrowUp:-1}[e.key];if(!step)return;e.preventDefault();pick(items[(index+step+items.length)%items.length]);});}
 $('#theme-mode').querySelectorAll('button').forEach(b=>b.onclick=()=>setAppearance({mode:b.dataset.mode}));
-radioKeys($('#theme-mode'),b=>b.click());radioKeys($('#seed-grid'),b=>b.click());
-$('#appearance').onclick=()=>{renderAppearance();$('#appearance-dialog').showModal();$('#appearance-dialog [role=radio][aria-checked="true"]')?.focus();};
-$('#appearance-close').onclick=()=>$('#appearance-dialog').close();
-window.stillEvents.accentColor?.(color=>{applyTheme(undefined,color);if($('#appearance-dialog').open)renderAppearance();});
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if($('#appearance-dialog').open)renderAppearance();});
+$('#pure-black').onchange=e=>setAppearance({pureBlack:e.target.checked});
+radioKeys($('#theme-mode'),b=>b.click());radioKeys($('#seed-grid'),b=>b.click());radioKeys($('#style-grid'),b=>b.click());
+$('#settings').onclick=()=>{renderAppearance();renderUpdate(updateState);$('#settings-dialog').showModal();$('#theme-mode [aria-checked="true"]')?.focus();};
+$('#settings-close').onclick=()=>$('#settings-dialog').close();
+window.stillEvents.accentColor?.(color=>{applyTheme(undefined,color);if($('#settings-dialog').open)renderAppearance();});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if($('#settings-dialog').open)renderAppearance();});

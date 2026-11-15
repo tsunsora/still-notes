@@ -27,7 +27,7 @@ if(process.versions.electron){
    assert.equal(state.status,'idle');assert.equal(state.reason,'');assert.equal(state.message,'');
    const versionLabel='v'+await app.evaluate(({app})=>app.getVersion());
    const button=page.locator('#app-update');
-   await button.waitFor();assert.equal(await page.locator('#update-label').textContent(),versionLabel);
+   await page.locator('#settings').click();await button.waitFor();assert.equal(await page.locator('#update-label').textContent(),'Check for updates');
    assert.equal(await button.getAttribute('aria-label'),`Still Notes ${versionLabel} · Check for updates`);
    await app.evaluate(({shell,app})=>{
     globalThis.updateLinks=[];globalThis.unsignedUpdateChecks=0;
@@ -41,6 +41,7 @@ if(process.versions.electron){
    assert.equal(await app.evaluate(()=>globalThis.unsignedUpdateChecks),3);
    assert.equal((await page.evaluate(()=>window.still['update-state']())).value.status,'current');
    assert.equal(await page.locator('#toast').isVisible(),false);
+   await page.keyboard.press('Escape');await page.locator('#settings-dialog').waitFor({state:'hidden'});
    await page.locator('#editor').fill('Automatic updates keep saving normally');
    await page.locator('#close').click();await app.waitForEvent('close');
    assert.equal(await fs.readFile(path.join(root,'Test.md'),'utf8'),'Automatic updates keep saving normally');
