@@ -190,7 +190,7 @@ The update feed needs `latest.yml` plus the matching installer signature and che
 
 ## Credits
 
-The Still Notes logo was generated with GPT Image. Interface icons are Google's rounded Material icons under the Apache 2.0 license, and color schemes come from Google's [Material Color Utilities](https://github.com/material-foundation/material-color-utilities), also Apache 2.0. The icons' [license notice](src/MATERIAL-ICONS-LICENSE.txt) ships with the app.
+The Still Notes logo started as a GPT Image concept and is now drawn from exact geometry by [scripts/build-logo.cjs](scripts/build-logo.cjs), which writes every icon file. Interface icons are Google's rounded Material icons under the Apache 2.0 license, and color schemes come from Google's [Material Color Utilities](https://github.com/material-foundation/material-color-utilities), also Apache 2.0. The icons' [license notice](src/MATERIAL-ICONS-LICENSE.txt) ships with the app.
 
 ## Visitors
 
