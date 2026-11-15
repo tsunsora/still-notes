@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="src/icon.png" width="80" alt="">
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="docs/icon-light-mode.svg">
+    <img src="src/icon.svg" width="80" alt="">
+  </picture>
 </p>
 
 <h1 align="center">Still Notes</h1>
