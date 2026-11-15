@@ -2,6 +2,8 @@ import {marked} from '../node_modules/marked/lib/marked.esm.js';
 const $=s=>document.querySelector(s);
 import {icons,iconCatalog} from './icons.js';
 import {resolveNoteLink} from './note-links.mjs';
+import {applyTheme,applyCachedTheme,currentAppearance,currentAccent,presets,scheme,isDark} from './theme.js';
+applyCachedTheme();
 function icon(name){return icons[name]||icons.note;}
 document.querySelectorAll('[data-icon]').forEach(el=>el.innerHTML=icon(el.dataset.icon));
 let state={root:'',tree:[]}, active='', current='', dirty=false, timer, mode='edit', selectedFolder='', expanded=new Set(), saving=Promise.resolve(), busy=false, toastTimer;
@@ -105,7 +107,7 @@ $('#repositories-close').onclick=()=>$('#repositories-dialog').close();
 $('#repository-add').onclick=()=>repositoryAction(async()=>{await choose();$('#repositories-dialog').close();});
 function modal({title,description='',prefix='',value='',submit='Create',folders=null,confirm=false,onSubmit=null}){return new Promise(resolve=>{
  const d=$('#modal');if(d.open){resolve(null);return;}
- $('#modal-title').textContent=title;$('#modal-description').textContent=description;$('#modal-description').hidden=!description;$('#modal-input').value=value;$('#modal-field').hidden=!!folders||confirm;$('#modal-prefix').textContent=prefix;$('#modal-prefix').hidden=!prefix;$('#modal-select').hidden=!folders;$('#modal-submit').textContent=submit;$('#modal-error').hidden=true;
+ $('#modal-title').textContent=title;$('#modal-description').textContent=description;$('#modal-description').hidden=!description;$('#modal-input').value=value;$('#modal-field').hidden=!!folders||confirm;$('#modal-prefix').textContent=prefix;$('#modal-prefix').hidden=!prefix;$('#modal-select').hidden=!folders;$('#modal-submit').textContent=submit;$('#modal-submit').classList.toggle('danger',confirm&&/Recycle|Remove|Reload/.test(submit));$('#modal-error').hidden=true;
  if(folders){$('#modal-select').replaceChildren();for(const p of folders){const o=document.createElement('option');o.value=p;o.textContent=p?p.replaceAll('\\',' / '):state.name+' (root)';$('#modal-select').append(o);}}
  let submitting=false;const finish=result=>{d.close();resolve(result);};
  $('#modal-form').onsubmit=async e=>{e.preventDefault();if(submitting)return;const result=confirm?true:folders?$('#modal-select').value:$('#modal-input').value;
@@ -212,7 +214,7 @@ async function handleDrop(e,parent,anchor,position){
 for(const zone of [$('#tree'),$('#folder-label')]){zone.ondragover=e=>{if(!acceptsDrop(e)||e.target.closest('.tree-row'))return;e.preventDefault();clearDropIndicators();zone.classList.add('drop-into');e.dataTransfer.dropEffect=draggedPath?'move':'copy';};zone.ondragleave=e=>{if(!zone.contains(e.relatedTarget))zone.classList.remove('drop-into');};zone.ondrop=attempt(async e=>{if(e.target.closest('.tree-row'))return;e.preventDefault();e.stopPropagation();clearDropIndicators();await handleDrop(e,'','','after');});}
 document.addEventListener('dragover',e=>{if(e.dataTransfer.types.includes('Files'))e.preventDefault();});document.addEventListener('drop',e=>{e.preventDefault();});
 async function chooseIcon(item){if(item.type!=='note')return;const dialog=$('#icon-dialog');const grid=$('#icon-grid');grid.replaceChildren();for(const id of [null,...iconCatalog]){const b=document.createElement('button');b.type='button';b.className='icon-choice';b.innerHTML=icon(id||'note');b.title=id?id.charAt(0).toUpperCase()+id.slice(1):'Default';b.setAttribute('aria-label',b.title);b.setAttribute('aria-pressed',(state.icons?.[item.path]||null)===id);b.onclick=attempt(async()=>{state.icons=await api('set-icon',item.path,id);renderTree();dialog.close();});grid.append(b);}$('#icon-close').onclick=()=>dialog.close();dialog.showModal();}
-attempt(async()=>{const initial=await api('init');sidebarWidth=initial.sidebarWidth||280;applySidebarWidth();toggleSidebar(initial.sidebarHidden===true,false);await restoreWorkspace(initial);})();
+attempt(async()=>{const initial=await api('init');applyTheme(initial.appearance,initial.accentColor);sidebarWidth=initial.sidebarWidth||280;applySidebarWidth();toggleSidebar(initial.sidebarHidden===true,false);await restoreWorkspace(initial);})();
 
 function updateWindowControls(state){const maximized=state.maximized;const button=$('#maximize');button.title=maximized?'Restore down':'Maximize';button.setAttribute('aria-label',button.title);button.innerHTML=maximized?'<svg class="caption-icon" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 3.5v-2h6.5V8h-2"/><rect x="1.5" y="4" width="6.5" height="6.5"/></svg>':'<svg class="caption-icon" viewBox="0 0 12 12" aria-hidden="true"><rect x="1.5" y="1.5" width="9" height="9"/></svg>';document.body.classList.toggle('window-maximized',maximized);}
 window.stillEvents.windowState(updateWindowControls);
@@ -252,3 +254,28 @@ $('#app-update').onclick=attempt(async()=>{
 });
 attempt(async()=>renderUpdate(await api('update-state')))();
 window.addEventListener('online',()=>{api('resume-updates').catch(()=>{});});
+
+// Appearance: theme mode plus a Material seed. Each swatch previews its own scheme
+// the way Material You pickers do, primary over secondary and tertiary.
+function renderAppearance(){
+ const value=currentAppearance(),dark=isDark(value);
+ $('#theme-mode').querySelectorAll('button').forEach(b=>{const on=b.dataset.mode===value.mode;b.setAttribute('aria-checked',on);b.tabIndex=on?0:-1;});
+ const grid=$('#seed-grid');grid.replaceChildren();
+ const accent=currentAccent(),options=[...(accent?[{id:'accent',name:'Windows accent',color:accent}]:[]),...presets.map(p=>({...p,color:p.id}))];
+ for(const option of options){
+  const colors=scheme(option.color,dark),b=document.createElement('button'),on=value.seed===option.id;
+  b.type='button';b.className='seed';b.setAttribute('role','radio');b.setAttribute('aria-checked',on);b.setAttribute('aria-label',option.name);b.title=option.name;b.tabIndex=on?0:-1;
+  b.style.setProperty('--seed-primary',colors.primary);b.style.setProperty('--seed-secondary',colors.secondaryContainer);b.style.setProperty('--seed-tertiary',colors.tertiaryContainer);
+  b.innerHTML='<span class="seed-swatch" aria-hidden="true"></span>'+(on?icon('checkmark'):'');
+  b.onclick=()=>setAppearance({seed:option.id});grid.append(b);
+  if(on)$('#seed-name').textContent=option.name;
+ }
+}
+function setAppearance(change){const value=applyTheme(change);savePreferences({appearance:value});renderAppearance();const target=change.seed?$('#seed-grid [aria-checked="true"]'):$('#theme-mode [aria-checked="true"]');target?.focus();}
+function radioKeys(group,pick){group.addEventListener('keydown',e=>{const items=[...group.querySelectorAll('[role=radio]')],index=items.indexOf(document.activeElement);if(index<0)return;const step={ArrowRight:1,ArrowDown:1,ArrowLeft:-1,ArrowUp:-1}[e.key];if(!step)return;e.preventDefault();pick(items[(index+step+items.length)%items.length]);});}
+$('#theme-mode').querySelectorAll('button').forEach(b=>b.onclick=()=>setAppearance({mode:b.dataset.mode}));
+radioKeys($('#theme-mode'),b=>b.click());radioKeys($('#seed-grid'),b=>b.click());
+$('#appearance').onclick=()=>{renderAppearance();$('#appearance-dialog').showModal();$('#appearance-dialog [role=radio][aria-checked="true"]')?.focus();};
+$('#appearance-close').onclick=()=>$('#appearance-dialog').close();
+window.stillEvents.accentColor?.(color=>{applyTheme(undefined,color);if($('#appearance-dialog').open)renderAppearance();});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if($('#appearance-dialog').open)renderAppearance();});

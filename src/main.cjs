@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeTheme, screen, powerMonitor } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeTheme, screen, powerMonitor, systemPreferences } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -70,7 +70,11 @@ async function activateRoot(next){
  try{const result=await snapshot();rememberRoot();await saveSettings();revisions.clear();return {...result,repositories:settings.repositories};}
  catch(error){root=previous.root;settings.root=root;settings.last=previous.last;throw error;}
 }
-async function snapshot() { return {root, repositories:settings.repositories||[],name:root ? path.basename(root) : '', tree:root ? await scan() : [], last:settings.last || '', mode:settings.mode==='preview'?'preview':'edit',sidebarWidth:settings.sidebarWidth||280,sidebarHidden:settings.sidebarHidden===true,session:root?normalizeWorkspaceState(workspaceMeta().session):null,icons:root?Object.fromEntries(workspaceMeta().icons):{}}; }
+// Material color: a theme mode plus one seed, either a saved hex or the live Windows accent.
+const DEFAULT_SEED='#56707a';
+function normalizeAppearance(value){const mode=['system','light','dark'].includes(value?.mode)?value.mode:'dark';const seed=value?.seed==='accent'||/^#[0-9a-f]{6}$/i.test(value?.seed||'')?value.seed.toLowerCase():DEFAULT_SEED;return {mode,seed};}
+function accentColor(){try{const value=systemPreferences.getAccentColor?.();return /^[0-9a-f]{6}/i.test(value||'')?'#'+value.slice(0,6).toLowerCase():'';}catch{return '';}}
+async function snapshot() { return {root, repositories:settings.repositories||[],name:root ? path.basename(root) : '', tree:root ? await scan() : [], last:settings.last || '', mode:settings.mode==='preview'?'preview':'edit',sidebarWidth:settings.sidebarWidth||280,sidebarHidden:settings.sidebarHidden===true,appearance:normalizeAppearance(settings.appearance),accentColor:accentColor(),session:root?normalizeWorkspaceState(workspaceMeta().session):null,icons:root?Object.fromEntries(workspaceMeta().icons):{}}; }
 function handle(name, fn) { ipcMain.handle(name, async (event,...args) => {
   if (event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame) throw Error('Invalid request.');
   try { return {ok:true, value:await fn(...args)}; } catch (err) { return {ok:false,error:err.message}; }
@@ -161,6 +165,7 @@ handle('preferences',async values=>{
  if(Number.isFinite(values.sidebarWidth))settings.sidebarWidth=Math.round(Math.max(220,Math.min(480,values.sidebarWidth)));
  if(typeof values.sidebarHidden==='boolean')settings.sidebarHidden=values.sidebarHidden;
  if(root&&values.workspaceRoot===root&&values.session){const session=normalizeWorkspaceState(values.session);if(session)workspaceMeta().session=session;}
+ if(values.appearance&&typeof values.appearance==='object'){settings.appearance=normalizeAppearance(values.appearance);nativeTheme.themeSource=settings.appearance.mode;}
  delete settings.theme;await saveSettings();return true;
 });
 handle('trash', async rel => { const file=await safe(rel);if(path.relative(root,file)===''||path.relative(root,await fs.realpath(file))==='')throw Error('Cannot remove the notes folder.'); await shell.trashItem(file);const m=workspaceMeta();const keep=p=>p!==rel&&!p.startsWith(rel+path.sep);m.icons=m.icons.filter(([p])=>keep(p));m.orders=m.orders.filter(([p])=>keep(p)).map(([p,items])=>[p,items.filter(keep)]);if(m.session)m.session=removeWorkspacePaths(m.session,rel);if(settings.last&&!keep(settings.last))settings.last='';if(m.last&&!keep(m.last))m.last='';revisions.clear();await saveSettings();return true; });
@@ -187,16 +192,17 @@ app.whenReady().then(async()=>{
   // Native acrylic blurs the desktop once, beneath our shared translucent surface.
   // Keep a solid charcoal fallback on systems without Windows 11 backdrop support.
   const acrylic=process.platform==='win32'&&Number(require('node:os').release().split('.')[2])>=22621;
-  nativeTheme.themeSource='dark';
+  nativeTheme.themeSource=normalizeAppearance(settings.appearance).mode;
   const restoredWindow=restoreWindowState(settings.window,screen.getAllDisplays(),screen.getPrimaryDisplay());
   settings.window=restoredWindow;
-  win=new BrowserWindow({...restoredWindow.bounds,minWidth:Math.min(680,restoredWindow.bounds.width),minHeight:Math.min(480,restoredWindow.bounds.height),title:'Still Notes',icon:path.join(__dirname,'icon.ico'),backgroundColor:acrylic?'#00000000':'#1c2326',backgroundMaterial:acrylic?'acrylic':'none',frame:false,show:false,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+  win=new BrowserWindow({...restoredWindow.bounds,minWidth:Math.min(680,restoredWindow.bounds.width),minHeight:Math.min(480,restoredWindow.bounds.height),title:'Still Notes',icon:path.join(__dirname,'icon.ico'),backgroundColor:acrylic?'#00000000':nativeTheme.shouldUseDarkColors?'#171c1e':'#f5fafc',backgroundMaterial:acrylic?'acrylic':'none',frame:false,show:false,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
   Menu.setApplicationMenu(null);
   for(const event of ['maximize','unmaximize'])win.on(event,()=>win.webContents.send('window-state',{maximized:win.isMaximized()}));
   for(const event of ['resize','move','maximize','unmaximize','restore'])win.on(event,queueWindowSave);
   win.webContents.session.setPermissionRequestHandler((_w,_p,cb)=>cb(false));
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
   win.webContents.on('will-navigate',event=>event.preventDefault());
+  systemPreferences.on?.('accent-color-changed',()=>{if(!win.isDestroyed())win.webContents.send('accent-color',accentColor());});
   win.on('close',e=>{if(!closing){e.preventDefault();win.webContents.send('before-close');}});
   const hasUpdateConfig=await fs.access(path.join(process.resourcesPath,'app-update.yml')).then(()=>true,()=>false);
   const disabledReason=!app.isPackaged||process.env.STILL_TEST_DATA?'development':process.platform!=='win32'||!hasUpdateConfig?'portable':'';
