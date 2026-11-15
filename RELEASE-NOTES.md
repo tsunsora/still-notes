@@ -1,15 +1,14 @@
-# Still Notes 1.8.0
+# Still Notes 1.8.1
 
 ## What's new
 
-- **Light, dark, or system theme.** Still Notes now has a light theme, and can follow Windows as it switches between light and dark.
-- **Material color.** Pick a color and Still Notes builds a full Material 3 palette from it for the sidebar, highlights, buttons, menus, and dialogs. Use your Windows accent color, which updates when you change it in Windows, or choose Slate, Ink, Moss, Clay, Ochre, or Rose. Open **Appearance** from the palette button beside the app name. Slate in dark is the default and stays close to the previous look.
-- **A more comfortable page.** The reading column is a little narrower, headings are lighter, task checkboxes are drawn in your theme color with completed tasks dimmed, and tables use simple row lines.
-- **Consistent details.** Spacing, rounding, and motion follow one system throughout. Text selection, the cursor, and scrollbars match the theme, and confirmations that move items to the Recycle Bin use the warning color.
+- **A refined logo.** The folded-paper mark is redrawn with equal bands, even rounding, and a fold that wraps cleanly under the upper band, so it reads crisply from the taskbar to the installer. The window, taskbar, Start menu, and sidebar all use the new mark.
+
+This release also includes everything from 1.8.0: light, dark, and system themes, and Material color from your Windows accent or one of six presets, under **Appearance** beside the app name.
 
 ## Install or upgrade
 
-Version 1.6.7 and later update to this release automatically: it downloads in the background and installs when you close Still Notes. Click the version number to check now. Earlier versions should download **Still-Notes-Setup-1.8.0.exe** below and run it once to upgrade. Existing notes, saved folders, preferences, and shortcuts are preserved.
+Version 1.6.7 and later update to this release automatically: it downloads in the background and installs when you close Still Notes. Click the version number to check now. Earlier versions should download **Still-Notes-Setup-1.8.1.exe** below and run it once to upgrade. Existing notes, saved folders, preferences, and shortcuts are preserved.
 
 The installer does not have a Windows Authenticode certificate, so Windows may show an unknown-publisher warning. Automatic updates use a separate application-specific signing key and do not require that certificate.
 
